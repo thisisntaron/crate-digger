@@ -123,6 +123,8 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 .pack.big.tear{animation:tear .6s ease-in forwards}
 @keyframes tear{0%{transform:scale(1)}15%{transform:rotate(-4deg) scale(1.04)}30%{transform:rotate(4deg) scale(1.06)}45%{transform:rotate(-3deg) scale(1.08)}100%{transform:scale(1.35);opacity:0}}
 .sync{margin-top:32px;border:1px dashed var(--line);border-radius:12px;padding:16px;display:grid;gap:10px;justify-items:start}
+.bk.warn .syncmsg{color:var(--danger)}
+.bk .row{display:flex;gap:8px;flex-wrap:wrap}
 .sync b{font:800 16px var(--font-display)}
 
 /* decks */
@@ -243,6 +245,7 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
 <div id="ytbox"><div id="ytp"></div></div>
 <div id="layer-sheet"></div>
 <div id="layer-open"></div>
+<input type="file" id="loadfile" accept=".json,application/json" hidden>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script>
@@ -662,7 +665,7 @@ function viewPacks(){
   var packs=S.packs.map(function(p){return '<button class="pack" data-act="open-pack" data-id="'+p.id+'" aria-label="Open pack number '+p.id+'">'+packHtml(p)+'</button>'}).join('');
   return '<h2 class="h2">Packs</h2>'
     +'<p class="sub">'+(n?n+' sealed '+(n===1?'pack':'packs')+'. Tap one to open it, then sort each song as it comes out.':'No sealed packs right now. New songs from your sheet show up here as packs.')+'</p>'
-    +syncBox()
+    +syncBox()+backupBox()
     +(n?'<div class="packrow">'+packs+'</div>':'')
     +'<button class="linkbtn" data-act="reset">'+(ST.confirmReset?'Tap again to clear all cards, decks and packs on this device':'Start over on this device')+'</button>';
 }
@@ -671,6 +674,67 @@ function ago(ms){
   if(m<1)return 'just now';if(m<60)return m+' min ago';
   var h=Math.round(m/60);return h<24?h+' h ago':Math.round(h/24)+' d ago';
 }
+/* ---------- backup: save and load a file ---------- */
+var BKKEY='crate-digger-lastbackup';
+function progressSig(){return ownedIds().length+':'+S.decks.reduce(function(n,d){return n+d.ids.length},0)+':'+S.decks.length}
+function lastBackup(){try{return JSON.parse(localStorage.getItem(BKKEY)||'null')}catch(e){return null}}
+function backupBox(){
+  var lb=lastBackup(),has=ownedIds().length>0||S.decks.length>0,msg,warn=false;
+  if(!has)msg='Starting fresh on this device? Load a backup file to pick up where you left off.';
+  else if(!lb){msg='No backup yet. Progress is saved in this browser, but clearing website data would erase it.';warn=true}
+  else{
+    var changed=lb.sig!==progressSig(),days=(Date.now()-lb.t)/86400000;
+    msg='Last backup '+ago(lb.t)+(changed?', and you have sorted more since.':'. Nothing new to back up.');
+    if(changed&&days>=3)warn=true;
+  }
+  return '<div class="sync bk'+(warn?' warn':'')+'"><b>Backup</b><p class="syncmsg">'+esc(msg)+'</p>'
+    +'<div class="row"><button class="btn primary" data-act="save-backup">Save backup</button><button class="btn" data-act="load-backup">Load backup</button></div></div>';
+}
+function saveBackup(){
+  try{
+    var data={app:'crate-digger',v:1,saved:new Date().toISOString(),state:S};
+    var blob=new Blob([JSON.stringify(data)],{type:'application/json'});
+    var a=document.createElement('a'),d=new Date();
+    a.href=URL.createObjectURL(blob);
+    a.download='crate-digger-backup-'+d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)+'.json';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(a.href)},4000);
+    try{localStorage.setItem(BKKEY,JSON.stringify({t:Date.now(),sig:progressSig()}))}catch(e){}
+    toast('Backup saved. Keep the file somewhere safe, like iCloud Drive.');
+    render();
+  }catch(e){toast('Could not save the backup')}
+}
+function validState(x){
+  return x&&typeof x==='object'&&x.owned&&typeof x.owned==='object'&&Array.isArray(x.packs)&&Array.isArray(x.decks)
+    &&x.songs&&typeof x.songs==='object'&&x.seen&&typeof x.seen==='object'&&typeof x.nid==='number'&&typeof x.seq==='number'
+    &&x.decks.every(function(d){return d&&Array.isArray(d.ids)});
+}
+function loadBackupText(text){
+  var j;try{j=JSON.parse(text)}catch(e){toast('That file is not a Crate Digger backup');return}
+  var st=j&&j.app==='crate-digger'?j.state:j;
+  if(!validState(st)){toast('That file is not a Crate Digger backup');return}
+  var u={};st.decks.forEach(function(k){k.ids=k.ids.filter(function(i){if(u[i])return false;u[i]=1;return true})});
+  var cards=Object.keys(st.owned).length;
+  var have=ownedIds().length>0||S.decks.length>0;
+  if(have&&!window.confirm('Replace what is on this device ('+ownedIds().length+' cards, '+S.decks.length+' decks) with the backup ('+cards+' cards, '+st.decks.length+' decks)?'))return;
+  sndStop();ST.open=null;ST.radial=null;ST.deckId=null;ST.sheet=null;
+  S=st;SONGS=S.songs;artCache={};planCache={};
+  var made=rowsCache?mergeRows(rowsCache).packs:0;
+  save();
+  try{localStorage.setItem(BKKEY,JSON.stringify({t:Date.now(),sig:progressSig()}))}catch(e){}
+  renderOverlay();render();
+  toast('Backup loaded: '+cards+' cards, '+S.decks.length+' decks'+(made?'. '+made+' new packs from your sheet.':''));
+}
+document.addEventListener('change',function(e){
+  if(!e.target||e.target.id!=='loadfile')return;
+  var f=e.target.files&&e.target.files[0];e.target.value='';
+  if(!f)return;
+  var r=new FileReader();
+  r.onload=function(){loadBackupText(String(r.result||''))};
+  r.onerror=function(){toast('Could not read that file')};
+  r.readAsText(f);
+});
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
 function syncBox(){
   var st=SYNC.state,msg,bad=false,btn='';
   if(st==='ok'){
@@ -1086,6 +1150,8 @@ document.addEventListener('click',function(e){
       if(t.dataset.tab===ST.tab&&ST.tab==='decks')ST.deckId=null;
       ST.tab=t.dataset.tab;ST.confirmDel=false;ST.confirmReset=false;render();window.scrollTo(0,0);break;
     case 'sync':fetchSheet(0);break;
+    case 'save-backup':saveBackup();break;
+    case 'load-backup':$('#loadfile').click();break;
     case 'reset':
       if(!ST.confirmReset){ST.confirmReset=true;render();break}
       S=fresh();SONGS=S.songs;artCache={};planCache={};ST.confirmReset=false;ST.deckId=null;
