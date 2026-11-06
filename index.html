@@ -187,8 +187,8 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
 
 /* radial menu */
 .radial{position:relative;container-type:inline-size;aspect-ratio:1/1.2;margin:0 auto;flex:none;
-  width:max(250px,min(94vw,460px,calc((100vh - 400px) / 1.2)));
-  width:max(250px,min(94vw,460px,calc((100dvh - 400px) / 1.2)))}
+  width:max(250px,min(94vw,460px,calc((100vh - 470px) / 1.2)));
+  width:max(250px,min(94vw,460px,calc((100dvh - 470px) / 1.2)))}
 .cwrap{position:absolute;left:50%;top:50%;width:38%;transform:translate(-50%,-50%)}
 .cwrap .flipwrap{width:100%}
 .cin{width:100%;animation:rise .35s ease-out}
@@ -208,6 +208,9 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
 @keyframes pop{from{opacity:0;transform:translate(-50%,-50%) scale(.3)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
 .dock{display:flex;flex-direction:column;align-items:center;gap:10px;padding-top:8px;min-height:84px;flex:none}
 .dock .btn.primary{width:min(100%,480px)}
+.sortrow{display:flex;gap:8px;width:min(100%,480px);margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.sortrow .btn{flex:1;font-size:13px;padding:8px 6px;min-height:40px}
+.sortrow .btn.danger{color:var(--danger);border-color:var(--danger)}
 .pv{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center}
 .eq{display:inline-flex;align-items:flex-end;gap:2px;height:16px}
 .eq i{width:3px;height:100%;background:var(--accent);transform-origin:bottom;transform:scaleY(.25);animation:eq .7s ease-in-out infinite alternate;animation-play-state:paused}
@@ -544,27 +547,38 @@ function sndStart(id){
 
 /* ---------- real song snippets: YouTube's own player, about 22 seconds from inside the song ---------- */
 var YTP={player:null,ready:false,id:null,playing:false,dur:{},failed:{},mode:''};
-var CLIP={a:null,id:null,playing:false};
+var CLIP={a:null,id:null,playing:false,tok:0};
+/* One shared audio element, unlocked by the first touch. iPhones only let a page start sound
+   from a tap, so reusing an element that a tap has already unlocked lets the next card's clip start by itself. */
+var SILENT='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
+function clipEl(){if(!CLIP.a){CLIP.a=new Audio();CLIP.a.preload='auto'}return CLIP.a}
+function unlockAudio(){
+  document.removeEventListener('pointerdown',unlockAudio,true);document.removeEventListener('touchend',unlockAudio,true);
+  try{var a=clipEl();if(!a.src){a.src=SILENT;var pr=a.play();if(pr&&pr.then)pr.then(function(){if(!CLIP.playing)a.pause()}).catch(function(){})}}catch(e){}
+}
+document.addEventListener('pointerdown',unlockAudio,true);document.addEventListener('touchend',unlockAudio,true);
 function clipUrl(id){var e=ARTJ[id];return e&&e.p?e.p:null}
 function clipStop(){
-  CLIP.playing=false;CLIP.id=null;
-  if(CLIP.a){try{CLIP.a.pause()}catch(e){}CLIP.a.onended=CLIP.a.onerror=null;CLIP.a=null}
+  CLIP.playing=false;CLIP.id=null;CLIP.tok++;
+  if(CLIP.a){try{CLIP.a.pause()}catch(e){}CLIP.a.onended=CLIP.a.onerror=null}
   updatePlayUi();
 }
 function clipPlay(id){
   var u=clipUrl(id);if(!u)return false;
   try{
-    var a=new Audio(u);CLIP.a=a;CLIP.id=id;CLIP.playing=true;
-    a.onended=function(){if(CLIP.a===a){CLIP.playing=false;updatePlayUi()}};
+    var a=clipEl(),tok=++CLIP.tok;
+    CLIP.id=id;CLIP.playing=true;
+    a.onended=function(){if(CLIP.tok===tok){CLIP.playing=false;updatePlayUi()}};
     a.onerror=function(){
-      if(CLIP.a!==a)return;
+      if(CLIP.tok!==tok)return;
       clipStop();var e=ARTJ[id];if(e)delete e.p;
       if(curCardId()===id){YTP.mode='';pvStart(id)}
     };
+    a.src=u;
     var pr=a.play();
-    if(pr&&pr.catch)pr.catch(function(){if(CLIP.a===a){clipStop()}});
+    if(pr&&pr.catch)pr.catch(function(){if(CLIP.tok===tok){CLIP.playing=false;CLIP.id=null;updatePlayUi();setNote()}});
     return true;
-  }catch(e){CLIP.a=null;CLIP.id=null;CLIP.playing=false;return false}
+  }catch(e){CLIP.id=null;CLIP.playing=false;return false}
 }
 function isPlaying(){return YTP.playing||snd.playing||CLIP.playing}
 function sndStop(){synthStop();ytStop();clipStop()}
@@ -778,11 +792,9 @@ function renderSheet(anim){
 
 /* ---------- radial menu ---------- */
 function ringHtml(id){
-  var items=[{k:'none',label:'No deck'}];
+  var items=[];
   S.decks.forEach(function(d){items.push({k:'deck',id:d.id,label:d.name||'Untitled deck',on:d.ids.indexOf(id)>=0})});
-  items.push({k:'new',label:'+ New deck'});
-  items.push({k:'recycle',label:'Recycle'});
-  var n=items.length;
+  var n=Math.max(items.length,1);
   var html=items.map(function(it,k){
     var th=-Math.PI/2+k*2*Math.PI/n;
     var left=50+41*Math.cos(th),top=50+41.67*Math.sin(th);
@@ -805,6 +817,27 @@ function pvHtml(id){
     +'<span class="eq'+(isPlaying()?' on':'')+'" id="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>'+real
     +'<span class="mono" id="pvnote">'+pvNote()+'</span>';
 }
+function sortRowHtml(){
+  return '<div class="sortrow"><button class="btn" data-act="ring-none">No deck</button><button class="btn" data-act="ring-new">+ New deck</button><button class="btn danger" data-act="ring-recycle">Recycle</button></div>';
+}
+function nextInQueue(){
+  var r=ST.radial;if(!r||!r.q)return null;
+  var q=r.q,k=q.indexOf(r.id),order=q.slice(k+1).concat(q.slice(0,Math.max(k,0)));
+  for(var j=0;j<order.length;j++){var id=order[j];if(id!==r.id&&S.owned[id]&&SONGS[id]&&!deckOf(id))return id}
+  return null;
+}
+function gotoNext(auto){
+  var n=nextInQueue();
+  if(n===null){
+    sndStop();
+    if(auto){toast('No more unsorted songs');ST.radial=null;renderOverlay();render()}
+    else toast('No other unsorted songs');
+    return;
+  }
+  sndStop();ST.radial.id=n;renderOverlay();render();
+  if(ST.auto)pvStart(n);
+}
+function advanceIfQueue(){if(ST.radial&&ST.radial.q){gotoNext(true);return true}return false}
 function recycle(id){
   delete S.owned[id];
   S.decks.forEach(function(d){var k=d.ids.indexOf(id);if(k>=0)d.ids.splice(k,1)});
@@ -834,14 +867,16 @@ function makeNamedDeck(){
   closeNamePanel();
   leaveOtherDecks(cid,null);
   var nd=newDeck([cid]);if(nm){nd.name=nm;save()}
-  fillRing(cid,true);render();toast('Made "'+nd.name+'" with this song');
+  toast('Made "'+nd.name+'" with this song');
+  if(advanceIfQueue())return;
+  fillRing(cid,true);render();
 }
 function newDeck(ids){
   var d={id:S.nid++,name:'Deck '+(S.decks.length+1),ids:ids||[]};
   S.decks.push(d);save();return d;
 }
 function finishCard(fate){
-  if(ST.radial){sndStop();ST.radial=null;renderOverlay();render();return}
+  if(ST.radial){if(ST.radial.q){gotoNext(true);return}sndStop();ST.radial=null;renderOverlay();render();return}
   var o=ST.open;if(!o||o.phase!=='cards')return;
   o.cards[o.i].fate=fate;sndStop();
   if(o.i<o.cards.length-1){o.i++;o.flipped=false}else{o.phase='summary'}
@@ -892,7 +927,8 @@ function renderOverlay0(){
     var id=ST.radial.id;
     el.innerHTML='<div class="ov"><div class="ov-top"><button class="btn ghost" data-act="close-radial">Close</button>'+autoChip()+'</div>'
       +'<div class="stage"><div class="radial" id="radial"><div class="ring" id="ring"></div><div class="cwrap"><div class="cin">'+card(id,0)+'</div></div></div></div>'
-      +'<div class="dock"><div class="pv" id="pv">'+pvHtml(id)+'</div></div></div>';
+      +'<div class="dock"><div class="pv" id="pv">'+pvHtml(id)+'</div>'
+      +(ST.radial.q?'<button class="btn primary" data-act="next-song">Next song</button>':'')+sortRowHtml()+'</div></div>';
     fillRing(id,false);
     return;
   }
@@ -904,13 +940,15 @@ function renderOverlay0(){
   }
   if(o.phase==='cards'){
     var c=o.cards[o.i],last=o.i===o.cards.length-1;
-    var dots=o.cards.map(function(_,k){return '<i class="'+(k<o.i?'on':'')+'"></i>'}).join('');
+    var dots=o.cards.map(function(_,k){return '<i class="'+(k<=o.i?'on':'')+'"></i>'}).join('');
     el.innerHTML='<div class="ov"><div class="ov-top"><span class="mono">Card '+(o.i+1)+' of '+o.cards.length+'</span><span class="tr">'+autoChip()+'<button class="btn ghost" data-act="skip">Skip rest</button></span></div>'
-      +'<div class="stage"><div class="radial" id="radial"><div class="ring late" id="ring"></div>'
-      +'<div class="cwrap" data-act="flip"><div class="flipwrap"><div class="flipper"><div class="face back"><div class="back-in"></div><div class="back-lbl">Crate Digger</div></div><div class="face front">'+card(c.id,0)+'</div></div></div></div></div></div>'
-      +'<div class="dock"><p class="hint" id="hint">Tap the card to flip it, then sort it</p><div class="pv" id="pv" hidden></div>'
-      +'<button class="btn primary" id="nextbtn" data-act="next" hidden>'+(last?'Finish':'Next card')+'</button></div>'
+      +'<div class="stage"><div class="radial" id="radial"><div class="ring" id="ring"></div>'
+      +'<div class="cwrap"><div class="cin">'+card(c.id,0)+'</div></div></div></div>'
+      +'<div class="dock"><div class="pv" id="pv">'+pvHtml(c.id)+'</div>'
+      +'<button class="btn primary" id="nextbtn" data-act="next">'+(last?'Finish':'Next card')+'</button>'+sortRowHtml()+'</div>'
       +'<div class="dots">'+dots+'</div></div>';
+    fillRing(c.id,false);
+    if(ST.auto)pvStart(c.id);
     return;
   }
   var kept=o.cards.filter(function(c){return c.fate!=='recycled'});
@@ -1063,7 +1101,11 @@ document.addEventListener('click',function(e){
       if(S.packs.length)beginOpen(S.packs[0].id);else renderOverlay();
       render();break;
     case 'done':sndStop();ST.open=null;renderOverlay();render();break;
-    case 'card':ST.radial={id:sid};renderOverlay();if(ST.auto)pvStart(sid);break;
+    case 'card':
+      ST.radial={id:sid};
+      if(ST.gf==='unsorted'){ST.radial.q=Array.prototype.map.call(document.querySelectorAll('#grid .cardbtn'),function(b){return b.dataset.id})}
+      renderOverlay();if(ST.auto)pvStart(sid);break;
+    case 'next-song':gotoNext(false);break;
     case 'close-radial':sndStop();ST.radial=null;renderOverlay();render();break;
     case 'auto-toggle':toggleAuto();break;
     case 'listen':sndStop();break;
@@ -1077,7 +1119,9 @@ document.addEventListener('click',function(e){
         var k=d.ids.indexOf(cid),was=deckOf(cid);
         if(k>=0){d.ids.splice(k,1);toast('Removed from '+d.name)}
         else{leaveOtherDecks(cid,d);d.ids.push(cid);toast((was?'Moved to ':'Added to ')+d.name)}
-        save();fillRing(cid,true);render();
+        save();
+        if(k<0&&advanceIfQueue())break;
+        fillRing(cid,true);render();
       }
       break;
     case 'ring-new':
