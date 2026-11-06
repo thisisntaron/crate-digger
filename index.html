@@ -544,9 +544,31 @@ function sndStart(id){
 
 /* ---------- real song snippets: YouTube's own player, about 22 seconds from inside the song ---------- */
 var YTP={player:null,ready:false,id:null,playing:false,dur:{},failed:{},mode:''};
-function isPlaying(){return YTP.playing||snd.playing}
-function sndStop(){synthStop();ytStop()}
-function pvNote(){return (YTP.ready&&YTP.mode!=='synth')?'Snippet from the real song':'Synth preview, not the real song'}
+var CLIP={a:null,id:null,playing:false};
+function clipUrl(id){var e=ARTJ[id];return e&&e.p?e.p:null}
+function clipStop(){
+  CLIP.playing=false;CLIP.id=null;
+  if(CLIP.a){try{CLIP.a.pause()}catch(e){}CLIP.a.onended=CLIP.a.onerror=null;CLIP.a=null}
+  updatePlayUi();
+}
+function clipPlay(id){
+  var u=clipUrl(id);if(!u)return false;
+  try{
+    var a=new Audio(u);CLIP.a=a;CLIP.id=id;CLIP.playing=true;
+    a.onended=function(){if(CLIP.a===a){CLIP.playing=false;updatePlayUi()}};
+    a.onerror=function(){
+      if(CLIP.a!==a)return;
+      clipStop();var e=ARTJ[id];if(e)delete e.p;
+      if(curCardId()===id){YTP.mode='';pvStart(id)}
+    };
+    var pr=a.play();
+    if(pr&&pr.catch)pr.catch(function(){if(CLIP.a===a){clipStop()}});
+    return true;
+  }catch(e){CLIP.a=null;CLIP.id=null;CLIP.playing=false;return false}
+}
+function isPlaying(){return YTP.playing||snd.playing||CLIP.playing}
+function sndStop(){synthStop();ytStop();clipStop()}
+function pvNote(){if(CLIP.id)return '30 second clip from the real song';return (YTP.ready&&YTP.mode!=='synth')?'Snippet from the real song':'Synth preview, not the real song'}
 function setNote(){var n=$('#pvnote');if(n)n.textContent=pvNote()}
 function initYT(){
   if(window.YT&&window.YT.Player){mkYT();return}
@@ -599,6 +621,7 @@ function ytError(){
 }
 function pvStart(id){
   sndStop();
+  if(clipPlay(id)){updatePlayUi();setNote();return}
   if(ytPlay(id)){setNote();updatePlayUi();return}
   YTP.mode='synth';sndStart(id);setNote();
 }
@@ -778,7 +801,7 @@ function fillRing(id,still){
 function autoChip(){return '<button class="chip'+(ST.auto?' on':'')+'" id="autochip" data-act="auto-toggle">Auto preview '+(ST.auto?'on':'off')+'</button>'}
 function pvHtml(id){
   var real=(id&&String(id).length===11)?'<a class="btn" data-act="listen" href="https://music.youtube.com/watch?v='+encodeURIComponent(id)+'" target="_blank" rel="noopener">Open in YouTube Music</a>':'';
-  return (YTP.ready?'<div class="ytrow"><div class="ytslot" id="ytslot"></div></div>':'')+'<button class="btn" id="playbtn" data-act="toggle-play">'+(isPlaying()?'❚❚ Pause':'▶︎ Play')+'</button>'
+  return (YTP.ready&&!clipUrl(id)?'<div class="ytrow"><div class="ytslot" id="ytslot"></div></div>':'')+'<button class="btn" id="playbtn" data-act="toggle-play">'+(isPlaying()?'❚❚ Pause':'▶︎ Play')+'</button>'
     +'<span class="eq'+(isPlaying()?' on':'')+'" id="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>'+real
     +'<span class="mono" id="pvnote">'+pvNote()+'</span>';
 }
