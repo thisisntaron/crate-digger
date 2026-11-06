@@ -690,19 +690,69 @@ function backupBox(){
   return '<div class="sync bk'+(warn?' warn':'')+'"><b>Backup</b><p class="syncmsg">'+esc(msg)+'</p>'
     +'<div class="row"><button class="btn primary" data-act="save-backup">Save backup</button><button class="btn" data-act="load-backup">Load backup</button></div></div>';
 }
-function saveBackup(){
+var BKNAME='crate-digger-backup.json';
+var BK={handle:null};
+var IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+function idbOp(mode,fn){
+  return new Promise(function(res,rej){
+    var r=indexedDB.open('crate-digger-bk',1);
+    r.onupgradeneeded=function(){r.result.createObjectStore('h')};
+    r.onerror=function(){rej(r.error)};
+    r.onsuccess=function(){
+      var tx=r.result.transaction('h',mode),q=fn(tx.objectStore('h'));
+      tx.oncomplete=function(){res(q&&q.result)};tx.onerror=function(){rej(tx.error)};
+    };
+  });
+}
+function keepHandle(h){BK.handle=h;try{idbOp('readwrite',function(st){return st.put(h,'file')}).catch(function(){})}catch(e){}}
+try{if(window.showSaveFilePicker)idbOp('readonly',function(st){return st.get('file')}).then(function(h){if(h)BK.handle=h}).catch(function(){})}catch(e){}
+function backupJson(){return JSON.stringify({app:'crate-digger',v:1,saved:new Date().toISOString(),state:S})}
+function backupDone(msg){
+  try{localStorage.setItem(BKKEY,JSON.stringify({t:Date.now(),sig:progressSig()}))}catch(e){}
+  toast(msg);render();
+}
+function downloadBackup(text){
   try{
-    var data={app:'crate-digger',v:1,saved:new Date().toISOString(),state:S};
-    var blob=new Blob([JSON.stringify(data)],{type:'application/json'});
-    var a=document.createElement('a'),d=new Date();
-    a.href=URL.createObjectURL(blob);
-    a.download='crate-digger-backup-'+d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)+'.json';
+    var blob=new Blob([text],{type:'application/json'}),a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);a.download=BKNAME;
     document.body.appendChild(a);a.click();
     setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(a.href)},4000);
-    try{localStorage.setItem(BKKEY,JSON.stringify({t:Date.now(),sig:progressSig()}))}catch(e){}
-    toast('Backup saved. Keep the file somewhere safe, like iCloud Drive.');
-    render();
+    backupDone('Backup saved as '+BKNAME+'. If a file with that name exists, delete the old one.');
   }catch(e){toast('Could not save the backup')}
+}
+function writeHandle(h,text){return h.createWritable().then(function(w){return w.write(text).then(function(){return w.close()})})}
+function saveViaFs(text){
+  function go(h){
+    var perm=h.requestPermission?h.requestPermission({mode:'readwrite'}):Promise.resolve('granted');
+    return perm.then(function(pm){if(pm!=='granted')throw 0;return writeHandle(h,text)}).then(function(){keepHandle(h);backupDone('Backup saved to '+h.name)});
+  }
+  function pick(){
+    window.showSaveFilePicker({suggestedName:BKNAME,types:[{description:'Crate Digger backup',accept:{'application/json':['.json']}}]})
+      .then(go).catch(function(e){if(!e||e.name!=='AbortError')downloadBackup(text)});
+  }
+  if(BK.handle)go(BK.handle).catch(function(){BK.handle=null;pick()});else pick();
+}
+function saveBackup(){
+  var text=backupJson();
+  if(window.showSaveFilePicker){saveViaFs(text);return}
+  try{
+    var file=new File([text],BKNAME,{type:'application/json'});
+    if(IS_IOS&&navigator.canShare&&navigator.canShare({files:[file]})){
+      navigator.share({files:[file],title:'Crate Digger backup'}).then(function(){backupDone('Pick Save to Files, then Replace if it asks, so there is only one backup file.')},
+        function(e){if(!e||e.name!=='AbortError')downloadBackup(text)});
+      return;
+    }
+  }catch(e){}
+  downloadBackup(text);
+}
+function loadBackupPick(){
+  if(window.showOpenFilePicker){
+    window.showOpenFilePicker({types:[{description:'Crate Digger backup',accept:{'application/json':['.json']}}]}).then(function(hs){
+      return hs[0].getFile().then(function(f){return f.text()}).then(function(t){if(loadBackupText(t))keepHandle(hs[0])});
+    }).catch(function(e){if(e&&e.name!=='AbortError')$('#loadfile').click()});
+    return;
+  }
+  $('#loadfile').click();
 }
 function validState(x){
   return x&&typeof x==='object'&&x.owned&&typeof x.owned==='object'&&Array.isArray(x.packs)&&Array.isArray(x.decks)
@@ -710,13 +760,13 @@ function validState(x){
     &&x.decks.every(function(d){return d&&Array.isArray(d.ids)});
 }
 function loadBackupText(text){
-  var j;try{j=JSON.parse(text)}catch(e){toast('That file is not a Crate Digger backup');return}
+  var j;try{j=JSON.parse(text)}catch(e){toast('That file is not a Crate Digger backup');return false}
   var st=j&&j.app==='crate-digger'?j.state:j;
-  if(!validState(st)){toast('That file is not a Crate Digger backup');return}
+  if(!validState(st)){toast('That file is not a Crate Digger backup');return false}
   var u={};st.decks.forEach(function(k){k.ids=k.ids.filter(function(i){if(u[i])return false;u[i]=1;return true})});
   var cards=Object.keys(st.owned).length;
   var have=ownedIds().length>0||S.decks.length>0;
-  if(have&&!window.confirm('Replace what is on this device ('+ownedIds().length+' cards, '+S.decks.length+' decks) with the backup ('+cards+' cards, '+st.decks.length+' decks)?'))return;
+  if(have&&!window.confirm('Replace what is on this device ('+ownedIds().length+' cards, '+S.decks.length+' decks) with the backup ('+cards+' cards, '+st.decks.length+' decks)?'))return false;
   sndStop();ST.open=null;ST.radial=null;ST.deckId=null;ST.sheet=null;
   S=st;SONGS=S.songs;artCache={};planCache={};
   var made=rowsCache?mergeRows(rowsCache).packs:0;
@@ -724,6 +774,7 @@ function loadBackupText(text){
   try{localStorage.setItem(BKKEY,JSON.stringify({t:Date.now(),sig:progressSig()}))}catch(e){}
   renderOverlay();render();
   toast('Backup loaded: '+cards+' cards, '+S.decks.length+' decks'+(made?'. '+made+' new packs from your sheet.':''));
+  return true;
 }
 document.addEventListener('change',function(e){
   if(!e.target||e.target.id!=='loadfile')return;
@@ -1151,7 +1202,7 @@ document.addEventListener('click',function(e){
       ST.tab=t.dataset.tab;ST.confirmDel=false;ST.confirmReset=false;render();window.scrollTo(0,0);break;
     case 'sync':fetchSheet(0);break;
     case 'save-backup':saveBackup();break;
-    case 'load-backup':$('#loadfile').click();break;
+    case 'load-backup':loadBackupPick();break;
     case 'reset':
       if(!ST.confirmReset){ST.confirmReset=true;render();break}
       S=fresh();SONGS=S.songs;artCache={};planCache={};ST.confirmReset=false;ST.deckId=null;
