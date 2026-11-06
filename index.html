@@ -124,6 +124,11 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 @keyframes tear{0%{transform:scale(1)}15%{transform:rotate(-4deg) scale(1.04)}30%{transform:rotate(4deg) scale(1.06)}45%{transform:rotate(-3deg) scale(1.08)}100%{transform:scale(1.35);opacity:0}}
 .sync{margin-top:32px;border:1px dashed var(--line);border-radius:12px;padding:16px;display:grid;gap:10px;justify-items:start}
 .bk.warn .syncmsg{color:var(--danger)}
+.bk input{width:100%;max-width:420px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);color:var(--fg);font:inherit;font-size:16px}
+.cfbox{position:fixed;inset:0;z-index:66;background:rgba(0,0,0,.6);display:grid;place-items:center;padding:20px}
+.cfin{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;max-width:420px;width:100%;display:grid;gap:12px}
+.cfin p{margin:0}
+.cfin .btn{width:100%}
 .bk .row{display:flex;gap:8px;flex-wrap:wrap}
 .sync b{font:800 16px var(--font-display)}
 
@@ -314,7 +319,7 @@ function load(){
   }catch(e){}
   return null;
 }
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}if(typeof cloudDirty==='function')cloudDirty()}
 var S=load()||fresh();
 SONGS=S.songs;
 var ST={tab:'packs',deckId:null,q:'',sort:'new',gf:'all',open:null,radial:null,sheet:null,addq:'',confirmDel:false,confirmReset:false,auto:true};
@@ -665,7 +670,7 @@ function viewPacks(){
   var packs=S.packs.map(function(p){return '<button class="pack" data-act="open-pack" data-id="'+p.id+'" aria-label="Open pack number '+p.id+'">'+packHtml(p)+'</button>'}).join('');
   return '<h2 class="h2">Packs</h2>'
     +'<p class="sub">'+(n?n+' sealed '+(n===1?'pack':'packs')+'. Tap one to open it, then sort each song as it comes out.':'No sealed packs right now. New songs from your sheet show up here as packs.')+'</p>'
-    +syncBox()+backupBox()
+    +syncBox()+cloudBox()+backupBox()
     +(n?'<div class="packrow">'+packs+'</div>':'')
     +'<button class="linkbtn" data-act="reset">'+(ST.confirmReset?'Tap again to clear all cards, decks and packs on this device':'Start over on this device')+'</button>';
 }
@@ -786,6 +791,162 @@ document.addEventListener('change',function(e){
   r.readAsText(f);
 });
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+/* ---------- cloud sync: progress saved to a hidden tab of your sheet through a small Google Apps Script ---------- */
+var CKEY='crate-digger-cloud',CMKEY='crate-digger-cloudmeta';
+var CLOUD={cfg:null,meta:{rev:0,t:0,dev:'',dirty:false},dirty:false,busy:false,state:'off',msg:'',at:0,timer:null,applying:false,seq:0,conflict:null,paused:false,lastPull:0};
+function cloudMetaSave(){CLOUD.meta.dirty=CLOUD.dirty;try{localStorage.setItem(CMKEY,JSON.stringify(CLOUD.meta))}catch(e){}}
+function cloudLoad(){
+  try{CLOUD.cfg=JSON.parse(localStorage.getItem(CKEY)||'null')}catch(e){}
+  try{var m=JSON.parse(localStorage.getItem(CMKEY)||'null');if(m&&typeof m==='object')CLOUD.meta=m}catch(e){}
+  if(!CLOUD.meta.dev){
+    var ua=navigator.userAgent;
+    CLOUD.meta.dev=(/iPad/.test(ua)?'iPad':/iPhone/.test(ua)?'iPhone':/Android/.test(ua)?'Android':'Computer')+'-'+Math.random().toString(36).slice(2,6);
+  }
+  CLOUD.dirty=!!CLOUD.meta.dirty;
+  CLOUD.state=CLOUD.cfg?'idle':'off';
+  cloudMetaSave();
+}
+function hasProgress(){return ownedIds().length>0||S.decks.length>0}
+function cloudErr(e){
+  if(e&&e.code==='token')return 'The secret word does not match the one in your script.';
+  if(e&&e.code==='notjson')return 'That link did not answer like the sync script. Check the link, and that the deployment allows Anyone.';
+  if(e&&e.code)return 'The sync script said: '+e.code;
+  return 'Could not reach the cloud. Will try again.';
+}
+function cloudParse(r){
+  return r.text().then(function(t){
+    var j;try{j=JSON.parse(t)}catch(e){throw {code:'notjson'}}
+    if(!j||!j.ok)throw {code:(j&&j.error)||'bad',res:j};
+    return j;
+  });
+}
+function cloudGet(cfg){
+  cfg=cfg||CLOUD.cfg;
+  var u=cfg.url+(cfg.url.indexOf('?')<0?'?':'&')+'token='+encodeURIComponent(cfg.token)+'&cb='+Date.now();
+  return fetch(u,{cache:'no-store'}).then(cloudParse);
+}
+function cloudPost(body,keep){
+  var txt=JSON.stringify(body);
+  return fetch(CLOUD.cfg.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:txt,keepalive:!!keep&&txt.length<60000}).then(cloudParse);
+}
+function cloudDirty(){
+  if(!CLOUD||!CLOUD.cfg||CLOUD.applying)return;
+  CLOUD.dirty=true;CLOUD.seq++;cloudMetaSave();
+  clearTimeout(CLOUD.timer);CLOUD.timer=setTimeout(function(){cloudPush()},3000);
+}
+function cloudRetry(){clearTimeout(CLOUD.timer);CLOUD.timer=setTimeout(function(){CLOUD.dirty?cloudPush():cloudPull()},30000)}
+function cloudPush(force,keep){
+  if(!CLOUD.cfg||CLOUD.busy||(CLOUD.paused&&!force))return Promise.resolve();
+  if(!CLOUD.dirty&&!force)return Promise.resolve();
+  CLOUD.busy=true;CLOUD.state='saving';var seq=CLOUD.seq;
+  return cloudPost({token:CLOUD.cfg.token,base:CLOUD.meta.rev,force:!!force,device:CLOUD.meta.dev,t:Date.now(),data:JSON.stringify(S)},keep).then(function(j){
+    CLOUD.busy=false;CLOUD.paused=false;
+    CLOUD.meta.rev=j.rev;CLOUD.meta.t=j.t;CLOUD.at=Date.now();
+    if(CLOUD.seq===seq)CLOUD.dirty=false;
+    cloudMetaSave();CLOUD.state='ok';CLOUD.msg='';
+    if(CLOUD.dirty)cloudDirty();
+    softRender();
+  },function(e){
+    CLOUD.busy=false;
+    if(e&&e.code==='conflict'){
+      cloudGet().then(function(j){CLOUD.conflict=j;showConflict()},function(e2){CLOUD.state='err';CLOUD.msg=cloudErr(e2);softRender();cloudRetry()});
+      return;
+    }
+    CLOUD.state='err';CLOUD.msg=cloudErr(e);softRender();
+    if(!(e&&e.code))cloudRetry();
+  });
+}
+function cloudPull(){
+  if(!CLOUD.cfg||CLOUD.busy)return Promise.resolve();
+  CLOUD.busy=true;CLOUD.state='checking';CLOUD.lastPull=Date.now();
+  return cloudGet().then(function(j){
+    CLOUD.busy=false;CLOUD.at=Date.now();
+    if(!j.data){
+      if(hasProgress()){CLOUD.dirty=true;cloudMetaSave();return cloudPush(true)}
+      CLOUD.state='ok';softRender();return;
+    }
+    if((j.rev||0)===CLOUD.meta.rev){CLOUD.state='ok';softRender();if(CLOUD.dirty)return cloudPush();return}
+    if(!CLOUD.dirty||!hasProgress()){applyRemote(j);return}
+    if(CLOUD.paused){softRender();return}
+    CLOUD.conflict=j;showConflict();
+  },function(e){
+    CLOUD.busy=false;CLOUD.state='err';CLOUD.msg=cloudErr(e);softRender();
+  });
+}
+function applyRemote(j){
+  var st;try{st=JSON.parse(j.data)}catch(e){toast('The cloud save could not be read');return false}
+  if(!validState(st)){toast('The cloud save could not be read');return false}
+  var u={};st.decks.forEach(function(k){k.ids=k.ids.filter(function(i){if(u[i])return false;u[i]=1;return true})});
+  CLOUD.applying=true;
+  sndStop();ST.open=null;ST.radial=null;ST.deckId=null;ST.sheet=null;
+  S=st;SONGS=S.songs;artCache={};planCache={};
+  if(rowsCache)mergeRows(rowsCache);
+  save();
+  CLOUD.applying=false;
+  CLOUD.meta.rev=j.rev;CLOUD.meta.t=j.t;CLOUD.dirty=false;CLOUD.paused=false;cloudMetaSave();
+  CLOUD.state='ok';CLOUD.at=Date.now();
+  renderOverlay();render();toast('Loaded your latest progress from the cloud');
+  return true;
+}
+function closeConflict(){var c=document.getElementById('cfbox');if(c)c.remove()}
+function showConflict(){
+  closeConflict();
+  var j=CLOUD.conflict,st=null;try{st=JSON.parse(j.data)}catch(e){}
+  var cc=st&&st.owned?Object.keys(st.owned).length:0,cd=st&&st.decks?st.decks.length:0;
+  var el=document.createElement('div');el.id='cfbox';el.className='cfbox';
+  el.innerHTML='<div class="cfin"><b>Two versions of your progress</b>'
+    +'<p class="syncmsg">Cloud: '+cc+' cards, '+cd+' decks, saved '+esc(ago(j.t||Date.now()))+(j.device?' from '+esc(j.device):'')+'.</p>'
+    +'<p class="syncmsg">This device: '+ownedIds().length+' cards, '+S.decks.length+' decks, with changes not saved to the cloud yet.</p>'
+    +'<button class="btn primary" data-act="cf-cloud">Use the cloud version</button>'
+    +'<button class="btn" data-act="cf-device">Keep this device (replaces the cloud)</button>'
+    +'<button class="btn ghost" data-act="cf-later">Decide later</button></div>';
+  document.body.appendChild(el);
+  CLOUD.state='conflict';softRender();
+}
+function cloudBox(){
+  var inner,c=CLOUD;
+  if(!c.cfg){
+    inner='<p class="syncmsg">Saves your progress to a hidden tab in your Google Sheet, so every device picks up where you left off. Needs a one-time setup.</p>'
+      +'<input id="cl-url" type="url" placeholder="Sync link from your script" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Sync link">'
+      +'<input id="cl-token" type="text" placeholder="Secret word" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Secret word">'
+      +'<div class="row"><button class="btn primary" data-act="cloud-connect">Connect</button></div>';
+  }else{
+    var msg,bad=false;
+    if(c.state==='saving'||c.state==='checking')msg=c.state==='saving'?'Saving...':'Checking the cloud...';
+    else if(c.state==='err'){bad=true;msg=c.msg}
+    else if(c.state==='conflict'){bad=true;msg='This device and the cloud have different progress. Tap Sync now to choose.'}
+    else msg=(c.dirty?'Changes waiting to save. ':'All changes saved. ')+(c.at?'Checked '+ago(c.at)+'.':'');
+    inner='<p class="syncmsg'+(bad?' bad':'')+'">'+esc(msg)+'</p><div class="row"><button class="btn primary" data-act="cloud-now">Sync now</button><button class="btn ghost" data-act="cloud-off">Turn off</button></div>';
+  }
+  return '<div class="sync bk"><b>Cloud sync</b>'+inner+'</div>';
+}
+function cloudConnect(){
+  var url=($('#cl-url')||{}).value,tok=($('#cl-token')||{}).value;
+  url=(url||'').trim();tok=(tok||'').trim();
+  if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)){toast('The link should start with https://script.google.com/');return}
+  if(!tok){toast('Enter the secret word');return}
+  var cfg={url:url,token:tok};
+  toast('Connecting...');
+  cloudGet(cfg).then(function(){
+    CLOUD.cfg=cfg;try{localStorage.setItem(CKEY,JSON.stringify(cfg))}catch(e){}
+    CLOUD.meta.rev=0;CLOUD.dirty=hasProgress();CLOUD.paused=false;cloudMetaSave();
+    CLOUD.state='idle';render();
+    return cloudPull();
+  }).then(function(){if(CLOUD.cfg&&CLOUD.state==='ok')toast('Cloud sync is on')},function(e){toast(cloudErr(e))});
+}
+function cloudOff(){
+  CLOUD.cfg=null;CLOUD.state='off';CLOUD.dirty=false;CLOUD.paused=false;clearTimeout(CLOUD.timer);
+  try{localStorage.removeItem(CKEY)}catch(e){}
+  cloudMetaSave();closeConflict();render();toast('Cloud sync is off. Your cloud copy is still in the sheet.');
+}
+document.addEventListener('visibilitychange',function(){
+  if(!CLOUD.cfg)return;
+  if(document.hidden){if(CLOUD.dirty){clearTimeout(CLOUD.timer);cloudPush(false,true)}}
+  else if(Date.now()-CLOUD.lastPull>20000)cloudPull();
+});
+window.addEventListener('pagehide',function(){if(CLOUD.cfg&&CLOUD.dirty)cloudPush(false,true)});
+window.addEventListener('online',function(){if(CLOUD.cfg)CLOUD.dirty?cloudPush():cloudPull()});
+
 function syncBox(){
   var st=SYNC.state,msg,bad=false,btn='';
   if(st==='ok'){
@@ -1112,13 +1273,13 @@ function mergeRows(rows){
     var old=SONGS[r.id];
     if(old){
       if(old.g!==r.g||old.t!==r.t||old.a!==r.a){old.g=r.g;old.t=r.t;old.a=r.a;delete artCache[r.id];delete planCache[r.id];changed++}
-    }else{SONGS[r.id]={id:r.id,t:r.t,a:r.a,g:r.g}}
+    }else{SONGS[r.id]={id:r.id,t:r.t,a:r.a,g:r.g};changed++}
     if(!S.seen[r.id]){S.seen[r.id]=1;fresh.push(r.id)}
   });
   shuffle(fresh);
   var made=0;
   while(fresh.length){S.packs.push({id:S.nid++,ids:fresh.splice(0,PACK_SIZE)});made++}
-  save();
+  if(made||changed)save();
   return {packs:made,changed:changed};
 }
 function softRender(){
@@ -1202,11 +1363,17 @@ document.addEventListener('click',function(e){
       ST.tab=t.dataset.tab;ST.confirmDel=false;ST.confirmReset=false;render();window.scrollTo(0,0);break;
     case 'sync':fetchSheet(0);break;
     case 'save-backup':saveBackup();break;
+    case 'cloud-connect':cloudConnect();break;
+    case 'cloud-now':CLOUD.paused=false;(CLOUD.dirty?cloudPush():cloudPull());break;
+    case 'cloud-off':cloudOff();break;
+    case 'cf-cloud':closeConflict();if(CLOUD.conflict)applyRemote(CLOUD.conflict);break;
+    case 'cf-device':closeConflict();CLOUD.paused=false;CLOUD.dirty=true;cloudPush(true);break;
+    case 'cf-later':closeConflict();CLOUD.paused=true;CLOUD.state='conflict';render();break;
     case 'load-backup':loadBackupPick();break;
     case 'reset':
       if(!ST.confirmReset){ST.confirmReset=true;render();break}
       S=fresh();SONGS=S.songs;artCache={};planCache={};ST.confirmReset=false;ST.deckId=null;
-      if(rowsCache){var mm=mergeRows(rowsCache);toast('Started over. '+mm.packs+' packs ready.')}else{save();toast('Started over')}
+      save();if(rowsCache){var mm=mergeRows(rowsCache);toast('Started over. '+mm.packs+' packs ready.')}else{toast('Started over')}
       render();break;
     case 'open-pack':beginOpen(id);break;
     case 'tear':tear();break;
@@ -1313,7 +1480,8 @@ document.addEventListener('visibilitychange',function(){
 render();
 loadArt();
 initYT();
-startSync();
+cloudLoad();
+if(CLOUD.cfg)cloudPull().then(startSync,startSync);else startSync();
 })();
 </script>
 </body>
