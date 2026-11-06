@@ -304,7 +304,7 @@ function fresh(){return {seq:0,nid:1,owned:{},packs:[],decks:[],songs:{},seen:{}
 function load(){
   try{
     var raw=localStorage.getItem(KEY);
-    if(raw){var d=JSON.parse(raw);if(d&&d.owned&&d.packs&&d.decks&&d.songs&&d.seen)return d}
+    if(raw){var d=JSON.parse(raw);if(d&&d.owned&&d.packs&&d.decks&&d.songs&&d.seen){var u={};d.decks.forEach(function(k){k.ids=k.ids.filter(function(i){if(u[i])return false;u[i]=1;return true})});return d}}
   }catch(e){}
   return null;
 }
@@ -679,7 +679,7 @@ function renderGrid(){
   $('#count').textContent=ids.length===total?total+' cards':ids.length+' of '+total+' cards';
   $('#grid').innerHTML=ids.length?ids.map(function(id){
     var s=SONGS[id];
-    return '<button class="cardbtn" data-act="card" data-id="'+id+'" aria-label="'+esc(s.t)+' by '+esc(s.a)+', '+esc(s.g)+'">'+card(id,deckCount(id))+'</button>';
+    return '<button class="cardbtn" data-act="card" data-id="'+id+'" aria-label="'+esc(s.t)+' by '+esc(s.a)+', '+esc(s.g)+'">'+card(id,0)+'</button>';
   }).join(''):'<p class="empty">'+(ST.gf==='unsorted'&&!ST.q?'Everything is sorted into a deck.':'No cards match. Clear the search or pick another filter.')+'</p>';
 }
 function viewDecks(){
@@ -732,7 +732,7 @@ function addRows(){
   var d=curDeck();if(!d)return '';
   var q=ST.addq.trim().toLowerCase();
   var ids=ownedIds().filter(function(id){
-    if(d.ids.indexOf(id)>=0)return false;
+    if(deckOf(id))return false;
     if(!q)return true;
     var s=SONGS[id];return (s.t+' '+s.a+' '+s.g).toLowerCase().indexOf(q)>=0;
   }).sort(function(a,b){return S.owned[b].n-S.owned[a].n});
@@ -789,6 +789,29 @@ function recycle(id){
   if(cand.length){p=cand[Math.floor(Math.random()*cand.length)];p.ids.push(id)}
   else{p={id:S.nid++,ids:[id]};S.packs.push(p)}
   save();return p;
+}
+function leaveOtherDecks(id,keep){S.decks.forEach(function(d){if(d!==keep){var k=d.ids.indexOf(id);if(k>=0)d.ids.splice(k,1)}})}
+function deckOf(id){return S.decks.find(function(d){return d.ids.indexOf(id)>=0})}
+function openNamePanel(cid){
+  closeNamePanel();
+  var p=document.createElement('div');p.id='namepanel';
+  p.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:65;background:#1b1b22;color:#fff;padding:14px 16px calc(14px + env(safe-area-inset-bottom));box-shadow:0 -6px 24px rgba(0,0,0,.5);display:flex;gap:8px;align-items:center;font:inherit';
+  p.dataset.cid=cid;
+  p.innerHTML='<input id="newdeck-name" maxlength="40" placeholder="Name this deck" autocomplete="off" style="flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid #555;background:#0e0e12;color:#fff;font:inherit;font-size:16px">'
+   +'<button data-act="newdeck-ok" style="padding:10px 14px;border-radius:10px;border:0;background:#e8b84a;color:#111;font:inherit;font-weight:600">Create</button>'
+   +'<button data-act="newdeck-cancel" style="padding:10px 12px;border-radius:10px;border:1px solid #555;background:none;color:#fff;font:inherit">Cancel</button>';
+  document.body.appendChild(p);
+  var i=p.querySelector('input');setTimeout(function(){i.focus()},30);
+}
+function closeNamePanel(){var p=document.getElementById('namepanel');if(p)p.remove()}
+function makeNamedDeck(){
+  var p=document.getElementById('namepanel');if(!p)return;
+  var cid=p.dataset.cid;if(!SONGS[cid]&&!S.owned[cid]){}
+  var nm=p.querySelector('input').value.trim();
+  closeNamePanel();
+  leaveOtherDecks(cid,null);
+  var nd=newDeck([cid]);if(nm){nd.name=nm;save()}
+  fillRing(cid,true);render();toast('Made "'+nd.name+'" with this song');
 }
 function newDeck(ids){
   var d={id:S.nid++,name:'Deck '+(S.decks.length+1),ids:ids||[]};
@@ -877,7 +900,7 @@ function renderOverlay0(){
   el.innerHTML='<div class="ov"><div class="ov-top"><span class="mono">Pack opened</span><span></span></div>'
     +'<div class="sumwrap"><h2 class="h2" style="text-align:center">'+kept.length+(kept.length===1?' song':' songs')+' added to your cards</h2>'
     +(note.length?'<p class="sub" style="text-align:center;margin:8px auto 0">'+note.join(' ')+'</p>':'')
-    +'<div class="sumgrid">'+kept.map(function(c){return card(c.id,deckCount(c.id))}).join('')+'</div></div>'
+    +'<div class="sumgrid">'+kept.map(function(c){return card(c.id,0)}).join('')+'</div></div>'
     +'<div class="ov-actions">'+(left?'<button class="btn primary" data-act="again">Open next pack ('+left+' left)</button>':'')
     +'<button class="btn'+(left?'':' primary')+'" data-act="done">Done</button></div></div>';
 }
@@ -1028,14 +1051,18 @@ document.addEventListener('click',function(e){
     case 'ring-deck':
       cid=curCardId();d=S.decks.find(function(x){return x.id===id});
       if(d&&cid!==null){
-        var k=d.ids.indexOf(cid);
-        if(k>=0){d.ids.splice(k,1);toast('Removed from '+d.name)}else{d.ids.push(cid);toast('Added to '+d.name)}
-        save();t.classList.toggle('on',k<0);t.setAttribute('aria-pressed',k<0?'true':'false');render();
+        var k=d.ids.indexOf(cid),was=deckOf(cid);
+        if(k>=0){d.ids.splice(k,1);toast('Removed from '+d.name)}
+        else{leaveOtherDecks(cid,d);d.ids.push(cid);toast((was?'Moved to ':'Added to ')+d.name)}
+        save();fillRing(cid,true);render();
       }
       break;
     case 'ring-new':
       cid=curCardId();
-      if(cid!==null){var nd=newDeck([cid]);fillRing(cid,true);render();toast('Made "'+nd.name+'" with this song. Rename it in Decks.')}
+      if(cid!==null)openNamePanel(cid);
+      break;
+    case 'newdeck-ok':makeNamedDeck();break;
+    case 'newdeck-cancel':closeNamePanel();
       break;
     case 'ring-none':
       cid=curCardId();
@@ -1059,7 +1086,7 @@ document.addEventListener('click',function(e){
     case 'close-sheet':ST.sheet=null;renderSheet();break;
     case 'add-one':
       d=curDeck();
-      if(d&&d.ids.indexOf(sid)<0){d.ids.push(sid);save();render();var al=$('#addlist');if(al)al.innerHTML=addRows()}
+      if(d&&d.ids.indexOf(sid)<0){leaveOtherDecks(sid,d);d.ids.push(sid);save();render();var al=$('#addlist');if(al)al.innerHTML=addRows()}
       break;
     case 'copy':copyDeck();break;
     case 'del':
@@ -1086,6 +1113,8 @@ document.addEventListener('change',function(e){
 });
 document.addEventListener('keydown',function(e){
   if(e.key==='Enter'&&e.target.id==='deck-name'){e.target.blur()}
+  if(e.key==='Enter'&&e.target.id==='newdeck-name'){makeNamedDeck();return}
+  if(e.key==='Escape'&&document.getElementById('namepanel')){closeNamePanel();return}
   if(e.key==='Escape'){
     if(ST.sheet){ST.sheet=null;renderSheet()}
     else if(ST.radial){sndStop();ST.radial=null;renderOverlay();render()}
