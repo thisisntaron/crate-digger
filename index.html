@@ -224,7 +224,7 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
 .dock{display:flex;flex-direction:column;align-items:center;gap:10px;padding-top:8px;min-height:84px;flex:none}
 .dock .btn.primary{width:min(100%,480px)}
 .sortrow{display:flex;gap:8px;width:min(100%,480px);margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
-.sortrow .btn{flex:1;font-size:13px;padding:8px 6px;min-height:40px}
+.sortrow .btn{flex:1;font-size:12.5px;padding:8px 4px;min-height:40px;white-space:nowrap}
 .sortrow .btn.danger{color:var(--danger);border-color:var(--danger)}
 .pv{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center}
 .eq{display:inline-flex;align-items:flex-end;gap:2px;height:16px}
@@ -321,7 +321,7 @@ function pad3(n){return String(n).padStart(3,'0')}
 /* ---------- state ---------- */
 /* songs: id -> {id,t,a,g}; seen: ids already turned into packs, so only new rows ever become packs.
    The id is the YouTube video id from the link, so the same song never appears twice. */
-function fresh(){return {seq:0,nid:1,owned:{},packs:[],decks:[],songs:{},seen:{},spo:{n:0,day:''}}}
+function fresh(){return {seq:0,nid:1,owned:{},packs:[],decks:[],songs:{},seen:{},spo:{n:0,day:''},junk:{}}}
 function load(){
   try{
     var raw=localStorage.getItem(KEY);
@@ -729,7 +729,7 @@ function spotBox(){
 function viewMore(){
   return '<h2 class="h2">More</h2>'
     +'<p class="sub">Library sync, backups and reset.</p>'
-    +cloudBox()+syncBox()+backupBox()
+    +cloudBox()+junkBox()+syncBox()+backupBox()
     +'<div><button class="linkbtn" data-act="reset">'+(ST.confirmReset?'Tap again to clear all cards, decks and packs on this device':'Start over on this device')+'</button></div>';
 }
 function ago(ms){
@@ -1116,6 +1116,25 @@ function render(){
   else app.innerHTML=viewDecks();
 }
 
+/* ---------- junk list ---------- */
+function junkSheetHtml(){
+  var ids=junkIds();
+  var rows=ids.map(function(id){
+    var s=SONGS[id];
+    return '<li class="arow">'+thumb(id)+'<span class="tt"><b>'+esc(s.t)+'</b><span>'+esc(s.a)+' · '+esc(s.g)+'</span></span>'
+      +'<span class="mv"><button class="btn" data-act="junk-restore" data-id="'+id+'">Restore</button><button class="btn danger" data-act="junk-delete" data-id="'+id+'" aria-label="Delete for good">Delete</button></span></li>';
+  }).join('');
+  return '<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet tall" role="dialog" aria-label="Junk">'
+    +'<div class="sheet-head"><h3 class="h3">Junk ('+ids.length+')</h3><button class="btn" data-act="close-sheet">Done</button></div>'
+    +'<p class="sub" style="margin:0 0 8px">Songs you do not listen to anymore. Restore puts one back in your cards. Delete removes it for good; it will not come back as a pack.</p>'
+    +'<ul class="addlist">'+(rows||'<li class="empty">Nothing in Junk.</li>')+'</ul></div>';
+}
+function junkBox(){
+  var n=junkIds().length;
+  return '<div class="sync"><b>Junk</b><p class="syncmsg">'+(n?n+(n===1?' song':' songs')+' you do not listen to anymore.':'Songs you junk while sorting show up here.')+'</p>'
+    +(n?'<div class="row"><button class="btn" data-act="junk-open">View junk</button></div>':'')+'</div>';
+}
+
 /* ---------- export ---------- */
 function csvCell(v){v=String(v==null?'':v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
 function songLink(id){
@@ -1182,6 +1201,7 @@ function renderSheet(anim){
   var el=$('#layer-sheet');
   lock();
   if(!ST.sheet){el.innerHTML='';return}
+  if(ST.sheet.type==='junk'){el.innerHTML=junkSheetHtml();if(anim){var sh1=$('.sheet',el);if(sh1)sh1.classList.add('enter')}return}
   if(ST.sheet.type==='export'){el.innerHTML=exportSheetHtml();if(anim){var sh0=$('.sheet',el);if(sh0)sh0.classList.add('enter')}return}
   el.innerHTML='<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet tall" role="dialog" aria-label="Add songs">'
     +'<div class="sheet-head"><h3 class="h3">Add songs</h3><button class="btn" data-act="close-sheet">Done</button></div>'
@@ -1221,7 +1241,7 @@ function pvHtml(id){
     +'<span class="mono" id="pvnote">'+pvNote()+'</span>';
 }
 function sortRowHtml(){
-  return '<div class="sortrow"><button class="btn" data-act="ring-none">No deck</button><button class="btn" data-act="ring-new">+ New deck</button><button class="btn danger" data-act="ring-recycle">Recycle</button></div>';
+  return '<div class="sortrow"><button class="btn" data-act="ring-none">No deck</button><button class="btn" data-act="ring-new">+ New deck</button><button class="btn" data-act="ring-junk">Junk</button><button class="btn danger" data-act="ring-recycle">Recycle</button></div>';
 }
 function nextInQueue(){
   var r=ST.radial;if(!r||!r.q)return null;
@@ -1252,6 +1272,15 @@ function recycle(id){
   else{p={id:S.nid++,ids:[id]};S.packs.push(p)}
   save();return p;
 }
+/* Junk: songs you no longer listen to. They leave your cards and decks but stay marked as seen, so they never come back as packs. */
+function junkSong(id){
+  S.decks.forEach(function(d){var k=d.ids.indexOf(id);if(k>=0)d.ids.splice(k,1)});
+  delete S.owned[id];
+  if(!S.junk)S.junk={};
+  S.junk[id]=Date.now();
+  save();
+}
+function junkIds(){return Object.keys(S.junk||{}).filter(function(id){return SONGS[id]}).sort(function(a,b){return S.junk[b]-S.junk[a]})}
 function leaveOtherDecks(id,keep){S.decks.forEach(function(d){if(d!==keep){var k=d.ids.indexOf(id);if(k>=0)d.ids.splice(k,1)}})}
 function deckOf(id){return S.decks.find(function(d){return d.ids.indexOf(id)>=0})}
 /* A deck holds at most DECK_MAX songs. A full deck is ready to export and leaves the radial menu. Exported decks (d.ex) are archived. */
@@ -1362,12 +1391,13 @@ function renderOverlay0(){
     if(ST.auto)pvStart(c.id);
     return;
   }
-  var kept=o.cards.filter(function(c){return c.fate!=='recycled'});
-  var rec=o.cards.length-kept.length;
+  var kept=o.cards.filter(function(c){return c.fate!=='recycled'&&c.fate!=='junked'});
+  var rec=o.cards.filter(function(c){return c.fate==='recycled'}).length,jk=o.cards.filter(function(c){return c.fate==='junked'}).length;
   var unsorted=kept.filter(function(c){return deckCount(c.id)===0}).length;
   var left=S.packs.length;
   var note=[];
   if(rec)note.push(rec+' recycled into other packs.');
+  if(jk)note.push(jk+' moved to Junk.');
   if(unsorted)note.push(unsorted+' still in no deck. Find them under Unsorted in Cards.');
   el.innerHTML='<div class="ov"><div class="ov-top"><span class="mono">Pack opened</span><span></span></div>'
     +'<div class="sumwrap"><h2 class="h2" style="text-align:center">'+kept.length+(kept.length===1?' song':' songs')+' added to your cards</h2>'
@@ -1562,6 +1592,13 @@ document.addEventListener('click',function(e){
         save();toast('Kept with no deck');finishCard('kept');
       }
       break;
+    case 'ring-junk':
+      cid=curCardId();
+      if(cid!==null){junkSong(cid);toast('Moved to Junk');finishCard('junked')}
+      break;
+    case 'junk-open':ST.sheet={type:'junk'};renderSheet(true);break;
+    case 'junk-restore':if(S.junk&&S.junk[sid]){delete S.junk[sid];S.owned[sid]={n:S.seq++};save();renderSheet();render();toast('Restored to your cards')}break;
+    case 'junk-delete':if(S.junk&&S.junk[sid]){delete S.junk[sid];save();renderSheet();render();toast('Deleted for good')}break;
     case 'ring-recycle':
       cid=curCardId();
       if(cid!==null){var rp=recycle(cid);toast('Recycled into pack No. '+pad3(rp.id));finishCard('recycled')}
