@@ -102,7 +102,9 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 #ytbox{position:fixed;z-index:60;left:-400px;top:0;width:200px;height:113px;border-radius:10px;overflow:hidden;background:#000}
 #ytbox iframe{width:100%;height:100%;display:block;border:0}
 .ytrow{flex:0 0 100%;display:flex;justify-content:center}
-.ytslot{width:220px;max-width:100%;aspect-ratio:16/9;border-radius:10px;background:var(--surface)}
+.ytslot{width:128px;max-width:100%;aspect-ratio:16/9;border-radius:10px;background:var(--surface)}
+/* the video row needs room, so the ring gets a little smaller while it is showing */
+body:has(.ytslot) .radial{width:max(250px,min(94vw,460px,calc((100vh - 410px - 84px) / 1.2)));width:max(250px,min(94vw,460px,calc((100dvh - 410px - 84px) / 1.2)))}
 .syncmsg.bad{color:var(--danger)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px;margin-top:10px}
 .empty{grid-column:1/-1;color:var(--muted);padding:28px 0;text-align:center}
