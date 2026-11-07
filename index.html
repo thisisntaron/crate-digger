@@ -1123,19 +1123,22 @@ function sortRowHtml(){
 }
 function nextInQueue(){
   var r=ST.radial;if(!r||!r.q)return null;
-  var q=r.q,k=q.indexOf(r.id),order=q.slice(k+1).concat(q.slice(0,Math.max(k,0)));
-  for(var j=0;j<order.length;j++){var id=order[j];if(id!==r.id&&S.owned[id]&&SONGS[id]&&!deckOf(id))return id}
+  var q=r.q,k=q.indexOf(r.id);
+  for(var j=k+1;j<q.length;j++){
+    var id=q[j];
+    if(S.owned[id]&&SONGS[id]&&!(r.u&&deckOf(id)))return id;
+  }
   return null;
 }
 function gotoNext(auto){
   var n=nextInQueue();
+  sndStop();
   if(n===null){
-    sndStop();
-    if(auto){toast('No more unsorted songs');ST.radial=null;renderOverlay();render()}
-    else toast('No other unsorted songs');
+    toast("That was the last card in the list. You've been through all of them.");
+    if(auto){ST.radial=null;renderOverlay();render()}
     return;
   }
-  sndStop();ST.radial.id=n;renderOverlay();render();
+  ST.radial.id=n;renderOverlay();render();
   if(ST.auto)pvStart(n);
 }
 function advanceIfQueue(){if(ST.radial&&ST.radial.q){gotoNext(true);return true}return false}
@@ -1226,10 +1229,11 @@ function renderOverlay0(){
   lock();
   if(ST.radial){
     var id=ST.radial.id;
-    el.innerHTML='<div class="ov"><div class="ov-top"><button class="btn ghost" data-act="close-radial">Close</button>'+autoChip()+'</div>'
+    var rq=ST.radial.q,pos=rq?rq.indexOf(id)+1:0;
+    el.innerHTML='<div class="ov"><div class="ov-top"><button class="btn ghost" data-act="close-radial">Close</button>'+(rq&&pos?'<span class="mono">Card '+pos+' of '+rq.length+'</span>':'')+autoChip()+'</div>'
       +'<div class="stage"><div class="radial" id="radial"><div class="ring" id="ring"></div><div class="cwrap"><div class="cin">'+card(id,0)+'</div></div></div></div>'
       +'<div class="dock"><div class="pv" id="pv">'+pvHtml(id)+'</div>'
-      +(ST.radial.q?'<button class="btn primary" data-act="next-song">Next song</button>':'')+sortRowHtml()+'</div></div>';
+      +(ST.radial.q?(nextInQueue()===null?'<button class="btn" data-act="next-song" disabled>Last card reached</button>':'<button class="btn primary" data-act="next-song">Next song</button>'):'')+sortRowHtml()+'</div></div>';
     fillRing(id,false);
     return;
   }
@@ -1412,7 +1416,8 @@ document.addEventListener('click',function(e){
     case 'done':sndStop();ST.open=null;renderOverlay();render();break;
     case 'card':
       ST.radial={id:sid};
-      if(ST.gf==='unsorted'){ST.radial.q=Array.prototype.map.call(document.querySelectorAll('#grid .cardbtn'),function(b){return b.dataset.id})}
+      ST.radial.q=Array.prototype.map.call(document.querySelectorAll('#grid .cardbtn'),function(b){return b.dataset.id});
+      ST.radial.u=ST.gf==='unsorted';
       renderOverlay();if(ST.auto)pvStart(sid);break;
     case 'next-song':gotoNext(false);break;
     case 'close-radial':sndStop();ST.radial=null;renderOverlay();render();break;
