@@ -322,7 +322,7 @@ function pad3(n){return String(n).padStart(3,'0')}
 /* ---------- state ---------- */
 /* songs: id -> {id,t,a,g}; seen: ids already turned into packs, so only new rows ever become packs.
    The id is the YouTube video id from the link, so the same song never appears twice. */
-function fresh(){return {seq:0,nid:1,owned:{},packs:[],decks:[],songs:{},seen:{},spo:{n:0,day:''},junk:{}}}
+function fresh(){return {seq:0,nid:1,owned:{},packs:[],decks:[],songs:{},seen:{},junk:{}}}
 function load(){
   try{
     var raw=localStorage.getItem(KEY);
@@ -336,29 +336,18 @@ SONGS=S.songs;
 var ST={tab:'packs',deckId:null,q:'',sort:'new',gf:'all',open:null,radial:null,sheet:null,addq:'',confirmDel:false,confirmReset:false,auto:true};
 var SYNC={state:'connecting',msg:'',at:0,total:0,busy:false};
 var rowsCache=null;
-/* Spotify songs: spotify.json holds them all in a fixed shuffled order. S.spo.n says how many are unlocked.
-   Ten packs (50 songs) unlock each day, and the Packs tab has a button to unlock ten more. */
-var SPOT=[],SPX={},SPOT_STEP=50;
+/* Spotify songs: spotify.json holds them all. Songs flagged d have been looked up (genre, art, clip) and become packs; the rest wait. */
+var SPOT=[],SPX={};
 function isSpot(id){return String(id).length===22}
-function pad2(n){return n<10?'0'+n:''+n}
 function spotRows(){
-  var n=(S.spo&&S.spo.n)||0,out=[];
-  for(var i=0;i<n&&i<SPOT.length;i++){var e=SPOT[i];out.push({id:e.i,t:e.t,a:e.a,g:gname(e.g)})}
+  var out=[];
+  for(var i=0;i<SPOT.length;i++){var e=SPOT[i];if(e.d)out.push({id:e.i,t:e.t,a:e.a,g:gname(e.g)})}
   return out;
 }
-function spotLeft(){return Math.max(0,SPOT.length-((S.spo&&S.spo.n)||0))}
-function spotUnlock(extra){
-  if(!SPOT.length)return 0;
-  if(!S.spo)S.spo={n:0,day:''};
-  var before=S.spo.n,d=new Date(),today=d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
-  if(extra)S.spo.n=Math.min(SPOT.length,S.spo.n+SPOT_STEP);
-  else if(S.spo.day!==today){S.spo.n=Math.min(SPOT.length,S.spo.n+SPOT_STEP);S.spo.day=today}
-  return S.spo.n-before;
-}
+function spotLeft(){var n=0;for(var i=0;i<SPOT.length;i++)if(!SPOT[i].d)n++;return n}
 function spotTick(){
-  if(!SPOT.length||SYNC.state==='connecting')return;
-  var got=spotUnlock(false),m=mergeRows(rowsCache||[]);
-  if(got||m.packs)save();
+  if(!SPOT.length)return;
+  var m=mergeRows(rowsCache||[]);
   if(m.packs){toast(m.packs+(m.packs===1?' new pack':' new packs')+' ready to open');softRender()}
 }
 function loadSpot(){
@@ -730,9 +719,7 @@ function viewPacks(){
 function spotBox(){
   if(!SPOT.length)return '';
   var left=spotLeft();
-  return '<div class="sync spotbox"><b>Spotify library</b><p class="syncmsg">'
-    +(left?esc(left.toLocaleString()+' songs still locked. 10 new packs unlock each day.'):'Every Spotify song is unlocked.')+'</p>'
-    +(left?'<div class="row"><button class="btn" data-act="spot-more">Unlock 10 more packs</button></div>':'')+'</div>';
+  return left?'<div class="sync spotbox"><b>Spotify library</b><p class="syncmsg">'+esc(left.toLocaleString()+' Spotify songs are not ready yet. Run crate_update.py on your Mac to prepare more.')+'</p></div>':'';
 }
 function viewMore(){
   return '<h2 class="h2">More</h2>'
@@ -1569,7 +1556,6 @@ document.addEventListener('click',function(e){
     case 'next-song':gotoNext(false);break;
     case 'close-radial':sndStop();ST.radial=null;renderOverlay();render();break;
     case 'auto-toggle':toggleAuto();break;
-    case 'spot-more':{var got=spotUnlock(true),mm2=mergeRows(rowsCache||[]);save();toast(mm2.packs+' new packs ready to open');render();break}
     case 'listen':sndStop();break;
     case 'toggle-play':
       cid=curCardId();
