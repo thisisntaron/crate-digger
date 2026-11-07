@@ -129,6 +129,9 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 .cfin{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;max-width:420px;width:100%;display:grid;gap:12px}
 .cfin p{margin:0}
 .cfin .btn{width:100%}
+.cbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 14px;padding:6px 6px 6px 12px;border:1px solid var(--line);border-radius:12px;font-size:14px;color:var(--muted)}
+.cbar.bad{color:var(--danger);border-color:var(--danger)}
+.cbar .btn{padding:6px 12px;min-height:34px;font-size:13px}
 .bk .row{display:flex;gap:8px;flex-wrap:wrap}
 .sync b{font:800 16px var(--font-display)}
 
@@ -194,9 +197,9 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
 
 /* radial menu */
 .radial{position:relative;container-type:inline-size;aspect-ratio:1/1.2;margin:0 auto;flex:none;
-  width:max(250px,min(94vw,460px,calc((100vh - 470px) / 1.2)));
-  width:max(250px,min(94vw,460px,calc((100dvh - 470px) / 1.2)))}
-.cwrap{position:absolute;left:50%;top:50%;width:38%;transform:translate(-50%,-50%)}
+  width:max(250px,min(94vw,460px,calc((100vh - 410px) / 1.2)));
+  width:max(250px,min(94vw,460px,calc((100dvh - 410px) / 1.2)))}
+.cwrap{position:absolute;left:50%;top:50%;width:var(--cw,38%);transform:translate(-50%,-50%)}
 .cwrap .flipwrap{width:100%}
 .cin{width:100%;animation:rise .35s ease-out}
 .ring{position:absolute;inset:0;pointer-events:none}
@@ -244,6 +247,7 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
     <button class="tab" data-act="tab" data-tab="packs"><span>Packs</span><span class="badge" id="badge" hidden></span></button>
     <button class="tab" data-act="tab" data-tab="cards">Cards</button>
     <button class="tab" data-act="tab" data-tab="decks">Decks</button>
+    <button class="tab" data-act="tab" data-tab="more">More</button>
   </div>
 </nav>
 
@@ -668,11 +672,16 @@ function toggleAuto(){
 function viewPacks(){
   var n=S.packs.length;
   var packs=S.packs.map(function(p){return '<button class="pack" data-act="open-pack" data-id="'+p.id+'" aria-label="Open pack number '+p.id+'">'+packHtml(p)+'</button>'}).join('');
-  return '<h2 class="h2">Packs</h2>'
-    +'<p class="sub">'+(n?n+' sealed '+(n===1?'pack':'packs')+'. Tap one to open it, then sort each song as it comes out.':'No sealed packs right now. New songs from your sheet show up here as packs.')+'</p>'
-    +syncBox()+cloudBox()+backupBox()
-    +(n?'<div class="packrow">'+packs+'</div>':'')
-    +'<button class="linkbtn" data-act="reset">'+(ST.confirmReset?'Tap again to clear all cards, decks and packs on this device':'Start over on this device')+'</button>';
+  var bad=SYNC.state==='error'?'<p class="syncmsg bad" style="margin:0 0 10px">'+esc(SYNC.msg||'Could not read your sheet.')+' See More.</p>':'';
+  return cloudBar()+'<h2 class="h2">Packs</h2>'
+    +'<p class="sub">'+(n?n+' sealed '+(n===1?'pack':'packs')+'. Tap one to open it.':'No sealed packs right now. New songs from your sheet show up here as packs.')+'</p>'
+    +bad+(n?'<div class="packrow">'+packs+'</div>':'');
+}
+function viewMore(){
+  return '<h2 class="h2">More</h2>'
+    +'<p class="sub">Library sync, backups and reset.</p>'
+    +cloudBox()+syncBox()+backupBox()
+    +'<div><button class="linkbtn" data-act="reset">'+(ST.confirmReset?'Tap again to clear all cards, decks and packs on this device':'Start over on this device')+'</button></div>';
 }
 function ago(ms){
   var m=Math.round((Date.now()-ms)/60000);
@@ -903,6 +912,17 @@ function showConflict(){
   document.body.appendChild(el);
   CLOUD.state='conflict';softRender();
 }
+function cloudBar(){
+  var c=CLOUD;
+  if(!c.cfg)return '<div class="cbar"><span>Cloud sync is off</span><button class="btn" data-act="tab" data-tab="more">Set up</button></div>';
+  var bad=false,msg;
+  if(c.state==='saving')msg='Saving...';
+  else if(c.state==='checking')msg='Checking the cloud...';
+  else if(c.state==='err'){bad=true;msg=c.msg}
+  else if(c.state==='conflict'){bad=true;msg='Versions differ. Tap Sync now.'}
+  else msg=c.dirty?'Changes waiting to save':'All changes saved';
+  return '<div class="cbar'+(bad?' bad':'')+'"><span>'+esc(msg)+'</span><button class="btn" data-act="cloud-now">Sync now</button></div>';
+}
 function cloudBox(){
   var inner,c=CLOUD;
   if(!c.cfg){
@@ -1036,6 +1056,7 @@ function render(){
   var badge=$('#badge');badge.textContent=S.packs.length;badge.hidden=!S.packs.length;
   var app=$('#app');
   if(ST.tab==='packs')app.innerHTML=viewPacks();
+  else if(ST.tab==='more')app.innerHTML=viewMore();
   else if(ST.tab==='cards'){app.innerHTML=viewCards();$('#sort').value=ST.sort;renderGrid()}
   else app.innerHTML=viewDecks();
 }
@@ -1077,12 +1098,14 @@ function ringHtml(id){
     return '<button class="rit '+it.k+(it.on?' on':'')+'" data-act="ring-'+it.k+'"'+(it.k==='deck'?' data-id="'+it.id+'" aria-pressed="'+(it.on?'true':'false')+'"':'')
       +' style="left:'+left.toFixed(2)+'%;top:'+top.toFixed(2)+'%;--k:'+k+'"><span class="rl">'+esc(it.label)+'</span></button>';
   }).join('');
-  return {html:html,sz:Math.min(17,0.82*287/n)};
+  var cw=n<=4?52:n<=6?48:n<=8?44:n<=10?41:38;
+  return {html:html,sz:Math.min(17,0.82*287/n),cw:cw};
 }
 function fillRing(id,still){
   var ring=$('#ring');if(!ring)return;
   var r=ringHtml(id);
   ring.style.setProperty('--isz',r.sz.toFixed(2)+'%');
+  var rd=$('#radial');if(rd)rd.style.setProperty('--cw',r.cw+'%');
   ring.classList.toggle('still',!!still);
   ring.innerHTML=r.html;
 }
