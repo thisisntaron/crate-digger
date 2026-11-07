@@ -284,6 +284,7 @@ var GEN={
  'Indie pop': {h:282,m:'tri',sc:'maj',bpm:112,lead:'triangle',bass:'sine',bp:'x...x...x...x...',k:'x...x...x...x...',s:'....x.......x...',hh:'x.x.x.x.x.x.x.x.',d:.6},
  'Dream & lo-fi':{h:186,m:'clouds',sc:'dor',bpm:84,lead:'sine',bass:'sine',bp:'x...............',k:'x.......x.......',s:NO,hh:NO,d:.3,long:true,pv:.09},
  'Psych & garage':{h:76,m:'swirl',sc:'minpent',bpm:128,lead:'square',bass:'sawtooth',bp:'x.x.x.x.x.x.x.x.',k:'x...x...x...x...',s:'....x.......x...',hh:'x.x.x.x.x.x.x.x.',d:.7,lv:.1,lf:1800},
+ 'Punk & hardcore':{h:2,m:'cross',sc:'minpent',bpm:178,lead:'sawtooth',bass:'sawtooth',bp:'x.x.x.x.x.x.x.x.',k:'x.x...x.x.x...x.',s:'....x.......x...',hh:'x.x.x.x.x.x.x.x.',d:.65,lv:.14,lf:2200},
  'Alt & post-punk':{h:336,m:'slash',sc:'min',bpm:140,lead:'sawtooth',bass:'sawtooth',bp:'x.x.x.x.x.x.x.x.',k:'x.....x...x.....',s:'....x.......x...',hh:'x.x.x.x.x.x.x.x.',d:.55,lv:.1,lf:1700},
  'Other':     {h:118,m:'dots',sc:'majpent',bpm:100,lead:'triangle',bass:'sine',bp:'x...x...x...x...',k:'x.......x.......',s:'....x.......x...',hh:'x.x.x.x.x.x.x.x.',d:.5}
 };
@@ -379,6 +380,7 @@ var MOTIF={
  waves:function(r,dk){var s='',amp=4+r()*5;for(var k=0;k<5;k++){var y=22+k*10;s+='<path d="M0 '+y+'Q13 '+f1(y-amp)+' 26 '+y+'T52 '+y+'V76H0Z" fill="'+dk+'" opacity="'+f1(.18+k*.17)+'"/>'}return s},
  checker:function(r,dk){var s='';for(var band=0;band<2;band++){var y0=band?56:3;for(var row=0;row<2;row++)for(var c=0;c<6;c++){if((row+c)%2===0)s+='<rect x="'+f1(c*8.67)+'" y="'+f1(y0+row*8.67)+'" width="8.67" height="8.67" fill="'+dk+'"/>'}}return s+'<polyline points="0,44 8,30 17,46 26,30 35,46 44,30 52,44" fill="none" stroke="'+dk+'" stroke-width="4"/>'},
  rings:function(r,dk){var s='';for(var k=1;k<=5;k++)s+='<circle cx="26" cy="38" r="'+k*6+'" fill="none" stroke="'+dk+'" stroke-width="1.6" opacity="'+f1(1.05-k*.15)+'"/>';return s+'<circle cx="26" cy="38" r="3" fill="'+dk+'"/>'},
+ cross:function(r,dk,lt,hi){return '<line x1="8" y1="12" x2="44" y2="48" stroke="'+dk+'" stroke-width="7"/><line x1="44" y1="12" x2="8" y2="48" stroke="'+dk+'" stroke-width="7"/><line x1="4" y1="64" x2="48" y2="64" stroke="'+hi+'" stroke-width="3"/>'},
  bolt:function(r,dk){return '<polygon points="30,2 10,42 24,42 18,74 44,30 29,30 38,2" fill="'+dk+'"/>'},
  venn:function(r,dk,lt,hi){return '<circle cx="19" cy="27" r="15" fill="'+dk+'" opacity=".55"/><circle cx="33" cy="27" r="15" fill="'+dk+'" opacity=".55"/><circle cx="26" cy="40" r="15" fill="'+dk+'" opacity=".55"/><circle cx="26" cy="31" r="4" fill="'+hi+'"/><circle cx="12" cy="64" r="3" fill="'+dk+'"/><circle cx="26" cy="64" r="3" fill="'+dk+'"/><circle cx="40" cy="64" r="3" fill="'+dk+'"/>'},
  blocks:function(r,dk,lt,hi){return '<rect x="6" y="8" width="30" height="30" fill="'+dk+'"/><rect x="16" y="18" width="30" height="30" fill="'+hi+'" stroke="'+dk+'" stroke-width="2.5"/><rect x="6" y="58" width="40" height="6" fill="'+dk+'"/><rect x="6" y="67" width="22" height="4" fill="'+dk+'"/>'},
