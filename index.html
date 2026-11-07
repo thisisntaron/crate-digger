@@ -316,7 +316,7 @@ function pad3(n){return String(n).padStart(3,'0')}
 /* ---------- state ---------- */
 /* songs: id -> {id,t,a,g}; seen: ids already turned into packs, so only new rows ever become packs.
    The id is the YouTube video id from the link, so the same song never appears twice. */
-function fresh(){return {seq:0,nid:1,owned:{},packs:[],decks:[],songs:{},seen:{}}}
+function fresh(){return {seq:0,nid:1,owned:{},packs:[],decks:[],songs:{},seen:{},spo:{n:0,day:''}}}
 function load(){
   try{
     var raw=localStorage.getItem(KEY);
@@ -330,9 +330,44 @@ SONGS=S.songs;
 var ST={tab:'packs',deckId:null,q:'',sort:'new',gf:'all',open:null,radial:null,sheet:null,addq:'',confirmDel:false,confirmReset:false,auto:true};
 var SYNC={state:'connecting',msg:'',at:0,total:0,busy:false};
 var rowsCache=null;
+/* Spotify songs: spotify.json holds them all in a fixed shuffled order. S.spo.n says how many are unlocked.
+   Ten packs (50 songs) unlock each day, and the Packs tab has a button to unlock ten more. */
+var SPOT=[],SPX={},SPOT_STEP=50;
+function isSpot(id){return String(id).length===22}
+function pad2(n){return n<10?'0'+n:''+n}
+function spotRows(){
+  var n=(S.spo&&S.spo.n)||0,out=[];
+  for(var i=0;i<n&&i<SPOT.length;i++){var e=SPOT[i];out.push({id:e.i,t:e.t,a:e.a,g:gname(e.g)})}
+  return out;
+}
+function spotLeft(){return Math.max(0,SPOT.length-((S.spo&&S.spo.n)||0))}
+function spotUnlock(extra){
+  if(!SPOT.length)return 0;
+  if(!S.spo)S.spo={n:0,day:''};
+  var before=S.spo.n,d=new Date(),today=d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+  if(extra)S.spo.n=Math.min(SPOT.length,S.spo.n+SPOT_STEP);
+  else if(S.spo.day!==today){S.spo.n=Math.min(SPOT.length,S.spo.n+SPOT_STEP);S.spo.day=today}
+  return S.spo.n-before;
+}
+function spotTick(){
+  if(!SPOT.length||SYNC.state==='connecting')return;
+  var got=spotUnlock(false),m=mergeRows(rowsCache||[]);
+  if(got||m.packs)save();
+  if(m.packs){toast(m.packs+(m.packs===1?' new pack':' new packs')+' ready to open');softRender()}
+}
+function loadSpot(){
+  try{
+    fetch('spotify.json').then(function(r){return r.ok?r.json():null}).then(function(j){
+      if(!j||!j.length)return;
+      SPOT=j;SPX={};j.forEach(function(e){SPX[e.i]=e});
+      artCache={};planCache={};spotTick();softRender();
+    }).catch(function(){});
+  }catch(e){}
+}
 /* Album art and tempo come from art.json, published next to the page. Nothing in it means the drawn sleeves are used. */
 var ARTJ={},ARTURL={};
 function artUrl(id){
+  if(SPX[id]&&SPX[id].u)return SPX[id].u;
   var e=ARTJ[id];if(!e||!e.a)return null;
   if(ARTURL[id]===undefined){
     try{var bin=atob(e.a),n=bin.length,u=new Uint8Array(n);for(var i=0;i<n;i++)u[i]=bin.charCodeAt(i);ARTURL[id]=URL.createObjectURL(new Blob([u],{type:'image/jpeg'}))}
@@ -403,7 +438,7 @@ function art(id,extra){
         +'<circle cx="70" cy="50" r="33" fill="#0a0d0f"/>'
         +'<circle cx="70" cy="50" r="28" '+gl+'/><circle cx="70" cy="50" r="23" '+gl+'/><circle cx="70" cy="50" r="18" '+gl+'/>'
         +'<circle cx="70" cy="50" r="10" fill="'+lab+'"/><circle cx="70" cy="50" r="1.8" fill="#0a0d0f"/>'
-        +(ARTJ[id].s==='yt'
+        +(ARTJ[id]&&ARTJ[id].s==='yt'
           /* YouTube thumbnails are 4:3 with the cover square in the middle (105,45 and 270 wide on a 480 x 360 frame) */
           ?'<svg x="6" y="17" width="66" height="66" viewBox="0 0 66 66"><image href="'+au+'" x="-25.7" y="-11" width="117.3" height="88"/></svg>'
           :'<image href="'+au+'" x="6" y="17" width="66" height="66" preserveAspectRatio="xMidYMid slice"/>')
@@ -571,7 +606,7 @@ function unlockAudio(){
   try{var a=clipEl();if(!a.src){a.src=SILENT;var pr=a.play();if(pr&&pr.then)pr.then(function(){if(!CLIP.playing)a.pause()}).catch(function(){})}}catch(e){}
 }
 document.addEventListener('pointerdown',unlockAudio,true);document.addEventListener('touchend',unlockAudio,true);
-function clipUrl(id){var e=ARTJ[id];return e&&e.p?e.p:null}
+function clipUrl(id){var e=ARTJ[id];if(e&&e.p)return e.p;var x=SPX[id];return x&&x.p?x.p:null}
 function clipStop(){
   CLIP.playing=false;CLIP.id=null;CLIP.tok++;
   if(CLIP.a){try{CLIP.a.pause()}catch(e){}CLIP.a.onended=CLIP.a.onerror=null}
@@ -585,7 +620,7 @@ function clipPlay(id){
     a.onended=function(){if(CLIP.tok===tok){CLIP.playing=false;updatePlayUi()}};
     a.onerror=function(){
       if(CLIP.tok!==tok)return;
-      clipStop();var e=ARTJ[id];if(e)delete e.p;
+      clipStop();var e=ARTJ[id];if(e)delete e.p;if(SPX[id])delete SPX[id].p;
       if(curCardId()===id){YTP.mode='';pvStart(id)}
     };
     a.src=u;
@@ -613,7 +648,7 @@ function mkYT(){
 }
 function snippetStart(id){var d=YTP.dur[id];return d?Math.max(0,Math.min(Math.round(d*.38),Math.round(d)-30)):40}
 function ytPlay(id){
-  if(!YTP.ready||YTP.failed[id])return false;
+  if(isSpot(id)||!YTP.ready||YTP.failed[id])return false;
   var st=snippetStart(id);
   YTP.id=id;YTP.mode='yt';
   try{YTP.player.loadVideoById({videoId:id,startSeconds:st,endSeconds:st+22})}catch(e){YTP.id=null;return false}
@@ -677,7 +712,14 @@ function viewPacks(){
   var bad=SYNC.state==='error'?'<p class="syncmsg bad" style="margin:0 0 10px">'+esc(SYNC.msg||'Could not read your sheet.')+' See More.</p>':'';
   return cloudBar()+'<h2 class="h2">Packs</h2>'
     +'<p class="sub">'+(n?n+' sealed '+(n===1?'pack':'packs')+'. Tap one to open it.':'No sealed packs right now. New songs from your sheet show up here as packs.')+'</p>'
-    +bad+(n?'<div class="packrow">'+packs+'</div>':'');
+    +bad+(n?'<div class="packrow">'+packs+'</div>':'')+spotBox();
+}
+function spotBox(){
+  if(!SPOT.length)return '';
+  var left=spotLeft();
+  return '<div class="sync spotbox"><b>Spotify library</b><p class="syncmsg">'
+    +(left?esc(left.toLocaleString()+' songs still locked. 10 new packs unlock each day.'):'Every Spotify song is unlocked.')+'</p>'
+    +(left?'<div class="row"><button class="btn" data-act="spot-more">Unlock 10 more packs</button></div>':'')+'</div>';
 }
 function viewMore(){
   return '<h2 class="h2">More</h2>'
@@ -1114,7 +1156,8 @@ function fillRing(id,still){
 function autoChip(){return '<button class="chip'+(ST.auto?' on':'')+'" id="autochip" data-act="auto-toggle">Auto preview '+(ST.auto?'on':'off')+'</button>'}
 function pvHtml(id){
   var real=(id&&String(id).length===11)?'<a class="btn" data-act="listen" href="https://music.youtube.com/watch?v='+encodeURIComponent(id)+'" target="_blank" rel="noopener">Open in YouTube Music</a>':'';
-  return (YTP.ready&&!clipUrl(id)?'<div class="ytrow"><div class="ytslot" id="ytslot"></div></div>':'')+'<button class="btn" id="playbtn" data-act="toggle-play">'+(isPlaying()?'❚❚ Pause':'▶︎ Play')+'</button>'
+  if(isSpot(id))real='<a class="btn" data-act="listen" href="https://open.spotify.com/track/'+encodeURIComponent(id)+'" target="_blank" rel="noopener">Open in Spotify</a>';
+  return (YTP.ready&&!clipUrl(id)&&!isSpot(id)?'<div class="ytrow"><div class="ytslot" id="ytslot"></div></div>':'')+'<button class="btn" id="playbtn" data-act="toggle-play">'+(isPlaying()?'❚❚ Pause':'▶︎ Play')+'</button>'
     +'<span class="eq'+(isPlaying()?' on':'')+'" id="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>'+real
     +'<span class="mono" id="pvnote">'+pvNote()+'</span>';
 }
@@ -1297,6 +1340,7 @@ function parseRows(values){
 }
 /* Songs the app has never seen become new packs, shuffled; songs it knows only get fresh details. */
 function mergeRows(rows){
+  rows=rows.concat(spotRows());
   var fresh=[],changed=0;
   rows.forEach(function(r){
     var old=SONGS[r.id];
@@ -1360,11 +1404,11 @@ function fetchSheet(attempt){
   }).then(function(text){
     SYNC.busy=false;SYNC.at=Date.now();
     applySheet({values:parseCsv(text)});
-    softRender();
+    spotTick();softRender();
   },function(e){
     if(!attempt){SYNC.busy=false;setTimeout(function(){fetchSheet(1)},1500);return}
     SYNC.busy=false;SYNC.state='error';SYNC.msg=syncError(e);
-    softRender();
+    spotTick();softRender();
   });
 }
 function startSync(){fetchSheet(0)}
@@ -1403,6 +1447,7 @@ document.addEventListener('click',function(e){
       if(!ST.confirmReset){ST.confirmReset=true;render();break}
       S=fresh();SONGS=S.songs;artCache={};planCache={};ST.confirmReset=false;ST.deckId=null;
       save();if(rowsCache){var mm=mergeRows(rowsCache);toast('Started over. '+mm.packs+' packs ready.')}else{toast('Started over')}
+      spotTick();
       render();break;
     case 'open-pack':beginOpen(id);break;
     case 'tear':tear();break;
@@ -1422,6 +1467,7 @@ document.addEventListener('click',function(e){
     case 'next-song':gotoNext(false);break;
     case 'close-radial':sndStop();ST.radial=null;renderOverlay();render();break;
     case 'auto-toggle':toggleAuto();break;
+    case 'spot-more':{var got=spotUnlock(true),mm2=mergeRows(rowsCache||[]);save();toast(mm2.packs+' new packs ready to open');render();break}
     case 'listen':sndStop();break;
     case 'toggle-play':
       cid=curCardId();
@@ -1509,6 +1555,7 @@ document.addEventListener('visibilitychange',function(){
 
 render();
 loadArt();
+loadSpot();
 initYT();
 cloudLoad();
 if(CLOUD.cfg)cloudPull().then(startSync,startSync);else startSync();
