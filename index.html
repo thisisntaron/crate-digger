@@ -138,6 +138,9 @@ body:has(.ytslot) .radial{width:max(250px,min(94vw,460px,calc((100vh - 410px - 8
 .sync b{font:800 16px var(--font-display)}
 
 /* decks */
+.rdy{color:var(--accent)}
+.sect{margin-top:28px}
+.steps{margin:12px 0 4px;padding-left:20px;display:grid;gap:8px;font-size:14px}
 .decklist{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:10px}
 .deckrow{width:100%;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:14px;display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center}
 .dn{font:800 18px/1.2 var(--font-display);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1061,15 +1064,18 @@ function renderGrid(){
     return '<button class="cardbtn" data-act="card" data-id="'+id+'" aria-label="'+esc(s.t)+' by '+esc(s.a)+', '+esc(s.g)+'">'+card(id,0)+'</button>';
   }).join(''):'<p class="empty">'+(ST.gf==='unsorted'&&!ST.q?'Everything is sorted into a deck.':'No cards match. Clear the search or pick another filter.')+'</p>';
 }
+function deckRowHtml(d){
+  var tag=d.ex?' · exported':deckFull(d)?' · <span class="rdy">ready to export</span>':' · '+(DECK_MAX-d.ids.length)+' to go';
+  return '<li><button class="deckrow" data-act="open-deck" data-id="'+d.id+'"><span class="dn">'+esc(d.name||'Untitled deck')+'</span><span class="chev" aria-hidden="true">›</span>'
+    +'<span class="dm">'+d.ids.length+(d.ids.length===1?' song':' songs')+rtx(d.ids)+tag+'</span>'+gbar(d.ids)+'</button></li>';
+}
 function viewDecks(){
   if(ST.deckId)return viewDeck();
-  var rows=S.decks.map(function(d){
-    return '<li><button class="deckrow" data-act="open-deck" data-id="'+d.id+'"><span class="dn">'+esc(d.name||'Untitled deck')+'</span><span class="chev" aria-hidden="true">›</span>'
-      +'<span class="dm">'+d.ids.length+(d.ids.length===1?' song':' songs')+rtx(d.ids)+'</span>'+gbar(d.ids)+'</button></li>';
-  }).join('');
+  var act=S.decks.filter(function(d){return !d.ex}),done=S.decks.filter(function(d){return d.ex});
   return '<div class="row-head"><h2 class="h2">Decks</h2><button class="btn primary" data-act="new-deck">New deck</button></div>'
-    +'<p class="sub">Every deck is a playlist. The bar shows its genre mix. Order matters, so move songs around until it flows.</p>'
-    +(S.decks.length?'<ul class="decklist">'+rows+'</ul>':'<p class="empty" style="margin-top:12px">No decks yet. Make one, then add songs from your cards.</p>');
+    +'<p class="sub">Every deck is a playlist of up to '+DECK_MAX+' songs. The bar shows its genre mix. When a deck fills up it is ready to export.</p>'
+    +(act.length?'<ul class="decklist">'+act.map(deckRowHtml).join('')+'</ul>':'<p class="empty" style="margin-top:12px">'+(done.length?'No active decks.':'No decks yet. Make one, then add songs from your cards.')+'</p>')
+    +(done.length?'<h3 class="h3 sect">Exported</h3><ul class="decklist">'+done.map(deckRowHtml).join('')+'</ul>':'');
 }
 function viewDeck(){
   var d=curDeck();
@@ -1087,7 +1093,10 @@ function viewDeck(){
     +'<input id="deck-name" class="deckname" type="text" maxlength="40" value="'+esc(d.name)+'" aria-label="Deck name" autocomplete="off">'
     +'<p class="sub mono" style="margin:8px 0 10px">'+d.ids.length+(d.ids.length===1?' song':' songs')+rtx(d.ids)+'</p>'
     +gbar(d.ids)+(mix?'<p class="mono" style="margin:6px 0 0">'+esc(mix)+'</p>':'')
-    +'<div class="actions"><button class="btn primary" data-act="add-songs">Add songs</button>'
+    +(d.ex?'<p class="syncmsg" style="margin:10px 0 0">Exported '+esc(new Date(d.ex).toLocaleDateString())+'. This deck is archived.</p>':deckFull(d)?'<p class="syncmsg rdy" style="margin:10px 0 0">Full at '+DECK_MAX+' songs. Ready to export.</p>':'')
+    +'<div class="actions">'
+    +(d.ex?'<button class="btn primary" data-act="reopen">Reopen deck</button>':'<button class="btn primary" data-act="add-songs"'+(deckFull(d)?' disabled':'')+'>Add songs</button>')
+    +'<button class="btn'+(deckFull(d)&&!d.ex?' primary':'')+'" data-act="export"'+(d.ids.length?'':' disabled')+'>Export</button>'
     +'<button class="btn" data-act="copy"'+(d.ids.length?'':' disabled')+'>Copy as text</button>'
     +'<button class="btn danger" data-act="del">'+(ST.confirmDel?'Tap again to delete':'Delete deck')+'</button></div>'
     +'<textarea id="export" class="export" readonly hidden rows="8" aria-label="Playlist text"></textarea>'
@@ -1105,6 +1114,53 @@ function render(){
   else if(ST.tab==='more')app.innerHTML=viewMore();
   else if(ST.tab==='cards'){app.innerHTML=viewCards();$('#sort').value=ST.sort;renderGrid()}
   else app.innerHTML=viewDecks();
+}
+
+/* ---------- export ---------- */
+function csvCell(v){v=String(v==null?'':v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+function songLink(id){
+  if(isSpot(id))return 'https://open.spotify.com/track/'+id;
+  if(String(id).length===11)return 'https://music.youtube.com/watch?v='+id;
+  return '';
+}
+function deckCsv(d){
+  var out=['Title,Artist,Album,Link'];
+  d.ids.forEach(function(id){var s=SONGS[id];out.push([s.t,s.a,'',songLink(id)].map(csvCell).join(','))});
+  return out.join('\r\n')+'\r\n';
+}
+function exportName(d){return (String(d.name||'playlist').replace(/[^A-Za-z0-9 _-]+/g,'').trim()||'playlist')+'.csv'}
+function exportSheetHtml(){
+  var d=curDeck();if(!d)return '';
+  return '<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet" role="dialog" aria-label="Export deck">'
+    +'<div class="sheet-head"><h3 class="h3">Export '+esc(d.name||'deck')+'</h3><button class="btn" data-act="close-sheet">Close</button></div>'
+    +'<ol class="steps"><li><b>Download the file.</b> It lists '+d.ids.length+' songs with title, artist and a link.</li>'
+    +'<li><b>Open TuneMyMusic.</b> Choose File as the source, upload it, pick YouTube Music as the destination and sign in.</li>'
+    +'<li><b>Come back here</b> and tap Mark as exported to archive this deck.</li></ol>'
+    +'<div class="actions"><button class="btn primary" data-act="export-csv">Download CSV</button>'
+    +'<a class="btn" href="https://www.tunemymusic.com/transfer/csv-to-youtube-music" target="_blank" rel="noopener">Open TuneMyMusic</a>'
+    +'<button class="btn" data-act="copy-sheet">Copy as text</button></div>'
+    +(d.ex?'<p class="syncmsg" style="margin-top:12px">Already marked as exported.</p>':'<div class="actions"><button class="btn" data-act="mark-exported">Mark as exported</button></div>')
+    +'</div>';
+}
+function exportCsv(){
+  var d=curDeck();if(!d)return;
+  var text=deckCsv(d),name=exportName(d);
+  try{
+    var file=new File([text],name,{type:'text/csv'});
+    if(IS_IOS&&navigator.canShare&&navigator.canShare({files:[file]})){
+      navigator.share({files:[file],title:name}).catch(function(e){if(!e||e.name!=='AbortError')dlText(text,name)});
+      return;
+    }
+  }catch(e){}
+  dlText(text,name);
+}
+function dlText(text,name){
+  try{
+    var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/csv'}));a.download=name;
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(a.href)},4000);
+    toast('Saved '+name);
+  }catch(e){toast('Could not save the file')}
 }
 
 /* ---------- add songs sheet ---------- */
@@ -1126,6 +1182,7 @@ function renderSheet(anim){
   var el=$('#layer-sheet');
   lock();
   if(!ST.sheet){el.innerHTML='';return}
+  if(ST.sheet.type==='export'){el.innerHTML=exportSheetHtml();if(anim){var sh0=$('.sheet',el);if(sh0)sh0.classList.add('enter')}return}
   el.innerHTML='<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet tall" role="dialog" aria-label="Add songs">'
     +'<div class="sheet-head"><h3 class="h3">Add songs</h3><button class="btn" data-act="close-sheet">Done</button></div>'
     +'<input id="add-q" type="search" placeholder="Search your cards" value="'+esc(ST.addq)+'" autocomplete="off" aria-label="Search your cards">'
@@ -1136,7 +1193,7 @@ function renderSheet(anim){
 /* ---------- radial menu ---------- */
 function ringHtml(id){
   var items=[];
-  S.decks.forEach(function(d){items.push({k:'deck',id:d.id,label:d.name||'Untitled deck',on:d.ids.indexOf(id)>=0})});
+  S.decks.filter(deckOpen).forEach(function(d){items.push({k:'deck',id:d.id,label:d.name||'Untitled deck',on:d.ids.indexOf(id)>=0})});
   var n=Math.max(items.length,1);
   var html=items.map(function(it,k){
     var th=-Math.PI/2+k*2*Math.PI/n;
@@ -1197,6 +1254,10 @@ function recycle(id){
 }
 function leaveOtherDecks(id,keep){S.decks.forEach(function(d){if(d!==keep){var k=d.ids.indexOf(id);if(k>=0)d.ids.splice(k,1)}})}
 function deckOf(id){return S.decks.find(function(d){return d.ids.indexOf(id)>=0})}
+/* A deck holds at most DECK_MAX songs. A full deck is ready to export and leaves the radial menu. Exported decks (d.ex) are archived. */
+var DECK_MAX=60;
+function deckFull(d){return d.ids.length>=DECK_MAX}
+function deckOpen(d){return !d.ex&&!deckFull(d)}
 function openNamePanel(cid){
   closeNamePanel();
   var p=document.createElement('div');p.id='namepanel';
@@ -1477,10 +1538,11 @@ document.addEventListener('click',function(e){
       break;
     case 'ring-deck':
       cid=curCardId();d=S.decks.find(function(x){return x.id===id});
+      if(d&&cid!==null&&!deckOpen(d)&&d.ids.indexOf(cid)<0){toast(d.name+' is full');break}
       if(d&&cid!==null){
         var k=d.ids.indexOf(cid),was=deckOf(cid);
         if(k>=0){d.ids.splice(k,1);toast('Removed from '+d.name)}
-        else{leaveOtherDecks(cid,d);d.ids.push(cid);toast((was?'Moved to ':'Added to ')+d.name)}
+        else{leaveOtherDecks(cid,d);d.ids.push(cid);toast(deckFull(d)?d.name+' is full at '+DECK_MAX+' songs. Ready to export.':(was?'Moved to ':'Added to ')+d.name)}
         save();
         if(k<0&&advanceIfQueue())break;
         fillRing(cid,true);render();
@@ -1515,9 +1577,18 @@ document.addEventListener('click',function(e){
     case 'close-sheet':ST.sheet=null;renderSheet();break;
     case 'add-one':
       d=curDeck();
-      if(d&&d.ids.indexOf(sid)<0){leaveOtherDecks(sid,d);d.ids.push(sid);save();render();var al=$('#addlist');if(al)al.innerHTML=addRows()}
+      if(d&&d.ids.indexOf(sid)<0&&!deckFull(d)){
+        leaveOtherDecks(sid,d);d.ids.push(sid);save();render();
+        if(deckFull(d)){ST.sheet=null;renderSheet();toast(d.name+' is full at '+DECK_MAX+' songs. Ready to export.')}
+        else{var al=$('#addlist');if(al)al.innerHTML=addRows()}
+      }
       break;
     case 'copy':copyDeck();break;
+    case 'export':ST.sheet={type:'export'};renderSheet(true);break;
+    case 'export-csv':exportCsv();break;
+    case 'copy-sheet':{d=curDeck();if(d){var tx=deckText(d);try{navigator.clipboard.writeText(tx).then(function(){toast('Playlist text copied')},function(){toast('Could not copy')})}catch(e2){toast('Could not copy')}}break}
+    case 'mark-exported':d=curDeck();if(d){d.ex=Date.now();save();ST.sheet=null;renderSheet();ST.deckId=null;render();toast(d.name+' moved to Exported')}break;
+    case 'reopen':d=curDeck();if(d){delete d.ex;save();render();toast('Deck reopened')}break;
     case 'del':
       if(!ST.confirmDel){ST.confirmDel=true;render();break}
       S.decks=S.decks.filter(function(x){return x.id!==ST.deckId});
