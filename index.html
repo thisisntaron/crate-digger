@@ -180,20 +180,50 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
   background:radial-gradient(ellipse at 50% 40%,#1b3039 0,var(--bg) 62%);
   padding:calc(14px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(14px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
 .ov-top{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;flex:none}
-/* phone held sideways: controls on the left, the card and its circles on the right */
+/* phone held sideways: card and controls on the left, a grid of playlist tiles on the right */
+.cg,.cpv,.rc,.os{display:none}
 @media (orientation:landscape) and (max-height:520px) and (pointer:coarse){
-  .ov:has(#radial){display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto minmax(0,1fr) auto;column-gap:14px;row-gap:4px;
-    padding-top:max(8px,env(safe-area-inset-top,0px));padding-bottom:max(8px,env(safe-area-inset-bottom,0px));overflow:hidden}
-  .ov:has(#radial) .ov-top{grid-column:1;grid-row:1;flex-wrap:wrap;justify-content:flex-start;gap:8px;min-height:0}
-  .ov:has(#radial) .ov-top .tr{flex-wrap:wrap}
-  .ov:has(#radial) .stage{grid-column:2;grid-row:1/4;align-self:stretch;justify-content:center}
-  .ov:has(#radial) .dock{grid-column:1;grid-row:2;align-self:center;min-height:0;padding-top:0;gap:8px;overflow-y:auto;min-width:0}
-  .ov:has(#radial) .dock .pv{justify-content:flex-start}
-  .ov:has(#radial) .dock .btn.primary,.ov:has(#radial) .dock .btn[data-act=next-song]{width:100%}
-  .ov:has(#radial) .sortrow{margin-top:4px;padding-top:8px;width:100%}
-  .ov:has(#radial) .dots{grid-column:1;grid-row:3;padding:2px 0 0;justify-content:flex-start}
-  .ov:has(#radial) .radial,body:has(.ytslot) .ov:has(#radial) .radial{width:calc((100dvh - 24px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)) / 1.2)}
+  .ov:has(#radial){display:grid;grid-template-columns:minmax(0,1fr) clamp(236px,38%,330px);grid-template-rows:auto minmax(0,1fr) auto auto;column-gap:12px;row-gap:6px;
+    padding-top:max(6px,env(safe-area-inset-top,0px));padding-bottom:max(6px,env(safe-area-inset-bottom,0px));overflow:hidden}
+  .ov:has(#radial) .ov-top{grid-column:1/-1;grid-row:1;min-height:0;gap:8px}
+  .ov:has(#radial) .ov-top .tr{gap:8px}
+  .ov:has(#radial) .ov-top .btn,.ov:has(#radial) .ov-top .chip{min-height:34px;padding-top:4px;padding-bottom:4px}
+  .ov:has(#radial) .stage,.ov:has(#radial) .radial,.ov:has(#radial) .cwrap,.ov:has(#radial) .cin,.ov:has(#radial) .dock,.ov:has(#radial) .flipwrap{display:contents}
+  .ov:has(#radial) .dots{display:none}
+  /* the sideways card: art on the left, details and play controls on the right */
+  .ov:has(#radial) .card{grid-column:1;grid-row:2;width:100%;height:100%;min-height:0;aspect-ratio:auto;container-type:size;animation:rise .35s ease-out}
+  .ov:has(#radial) .card-in{inset:8px;display:grid;grid-template-columns:min(calc(100cqh - 16px),48cqw) minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);column-gap:10px;align-content:start}
+  .ov:has(#radial) .card .art{grid-column:1;grid-row:1/-1;aspect-ratio:auto;width:100%;height:100%}
+  .ov:has(#radial) .card .ribbon,.ov:has(#radial) .card .dc{display:none}
+  .ov:has(#radial) .card .info{grid-column:2;grid-row:1;padding:6px 8px 0 0;flex:none}
+  .ov:has(#radial) .card .ct{font-size:clamp(14px,4cqw,18px);line-height:1.08}
+  .ov:has(#radial) .card .ca{font-size:clamp(12px,3.2cqw,14px);margin-top:3px}
+  .ov:has(#radial) .card .cg{display:flex;grid-column:2;grid-row:2;align-items:center;flex-wrap:wrap;gap:3px 8px;padding:5px 8px 0 0;font:600 11px/1.2 var(--font-mono);color:hsl(var(--gh) 20% 70%)}
+  .ov:has(#radial) .card .cg b{font:800 10.5px/1 var(--font-display);text-transform:uppercase;letter-spacing:.07em;padding:3px 7px;border-radius:99px;background:hsl(var(--gh) 70% 60%);color:hsl(var(--gh) 60% 9%)}
+  .ov:has(#radial) .card .foot{display:none}
+  .ov:has(#radial) .card .cpv{display:flex;grid-column:2;grid-row:3;align-self:end;min-height:0;padding:0 8px 0 0}
+  .ov:has(#radial) .cpv .pv{justify-content:flex-start;gap:6px;width:100%}
+  .ov:has(#radial) .cpv .btn{min-height:32px;padding:5px 9px;font-size:12.5px}
+  .ov:has(#radial) .cpv .ol{display:none}
+  .ov:has(#radial) .cpv .os{display:inline}
+  .ov:has(#radial) .cpv .eq{display:none}
+  body:has(.ytslot) .ov:has(#radial) .cpv #pvnote{display:none}
+  .ov:has(#radial) .cpv .ytrow{justify-content:flex-start}
+  .ov:has(#radial) .cpv .ytslot{width:104px}
+  .ov:has(#radial) .cpv #pvnote{flex:0 0 100%;font-size:10.5px;line-height:1.2;color:var(--muted)}
+  .ov:has(#radial) .dock .btn.primary,.ov:has(#radial) .dock .btn[data-act=next-song]{grid-column:1;grid-row:3;width:100%;min-height:40px}
+  .ov:has(#radial) .sortrow{grid-column:1;grid-row:4;width:100%;margin:0;padding:0;border:0}
+  .ov:has(#radial) .sortrow .btn{min-height:38px}
+  /* playlist tiles */
+  .ov:has(#radial) .ring{grid-column:2;grid-row:2/5;position:static;inset:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:calc((100% - 18px) / 4);gap:6px;align-content:start;
+    overflow-y:auto;pointer-events:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;min-height:0}
+  .ov:has(#radial) .rit{position:static;transform:none;width:auto;aspect-ratio:auto;border-radius:10px;font:600 12px/1.15 var(--font-body);padding:4px 6px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;animation:popg .3s ease-out backwards;animation-delay:calc(var(--k) * 25ms);min-width:0}
+  .ov:has(#radial) .rit:active{transform:scale(.95)}
+  .ov:has(#radial) .rit .rl{-webkit-line-clamp:2;line-clamp:2}
+  .ov:has(#radial) .rit .rc{display:block;font:500 10px/1 var(--font-mono);opacity:.75}
 }
+@keyframes popg{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
 
 .ov-top .tr{display:flex;gap:8px;align-items:center}
 .stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;min-height:0}
@@ -466,13 +496,16 @@ function art(id,extra){
   }
   return '<div class="art" style="background:'+a.bg+'">'+a.svg+(extra||'')+'</div>';
 }
-function card(id,dc){
+function card(id,dc,pvx){
   var s=SONGS[id];
   var extra='<span class="ribbon">'+esc(s.g)+'</span>'+(dc?'<span class="dc" title="In '+dc+(dc>1?' decks':' deck')+'">'+dc+'</span>':'');
   return '<div class="card" style="--gh:'+GEN[s.g].h+'"><div class="card-in">'+art(id,extra)
     +'<div class="info"><div class="ct">'+esc(s.t)+'</div><div class="ca">'+esc(s.a)+'</div></div>'
-    +'<div class="foot"><span>'+esc(s.y||'')+'</span><span>'+esc(s.d||'')+'</span></div></div></div>';
+    +'<div class="cg"><b>'+esc(s.g)+'</b>'+(s.y?'<span>'+esc(s.y)+'</span>':'')+(s.d?'<span>'+esc(s.d)+'</span>':'')+'</div>'
+    +'<div class="foot"><span>'+esc(s.y||'')+'</span><span>'+esc(s.d||'')+'</span></div>'+(pvx?'<div class="cpv">'+pvx+'</div>':'')+'</div></div>';
 }
+var LAND=window.matchMedia?window.matchMedia('(orientation:landscape) and (max-height:520px) and (pointer:coarse)'):null;
+function isLand(){return !!(LAND&&LAND.matches)}
 function thumb(id){return '<span class="thumb" style="--gh:'+GEN[SONGS[id].g].h+'">'+art(id)+'</span>'}
 function gcounts(ids){var m={};ids.forEach(function(id){var g=SONGS[id].g;m[g]=(m[g]||0)+1});return Object.keys(m).map(function(g){return {g:g,n:m[g]}}).sort(function(a,b){return b.n-a.n||a.g.localeCompare(b.g)})}
 function gbar(ids){
@@ -705,6 +738,7 @@ function placePlayer(){
   box.style.left=r.left+'px';box.style.top=r.top+'px';box.style.width=r.width+'px';box.style.height=r.height+'px';
 }
 window.addEventListener('resize',placePlayer);
+if(LAND&&LAND.addEventListener)LAND.addEventListener('change',function(){if(ST.radial||(ST.open&&ST.open.phase==='cards')){renderOverlay()}});
 document.addEventListener('scroll',placePlayer,true);
 function toggleAuto(){
   ST.auto=!ST.auto;
@@ -1223,13 +1257,13 @@ function renderSheet(anim){
 /* ---------- radial menu ---------- */
 function ringHtml(id){
   var items=[];
-  S.decks.filter(deckOpen).forEach(function(d){items.push({k:'deck',id:d.id,label:d.name||'Untitled deck',on:d.ids.indexOf(id)>=0})});
+  S.decks.filter(deckOpen).forEach(function(d){items.push({k:'deck',id:d.id,label:d.name||'Untitled deck',on:d.ids.indexOf(id)>=0,n:d.ids.length})});
   var n=Math.max(items.length,1);
   var html=items.map(function(it,k){
     var th=-Math.PI/2+k*2*Math.PI/n;
     var left=50+41*Math.cos(th),top=50+41.67*Math.sin(th);
     return '<button class="rit '+it.k+(it.on?' on':'')+'" data-act="ring-'+it.k+'"'+(it.k==='deck'?' data-id="'+it.id+'" aria-pressed="'+(it.on?'true':'false')+'"':'')
-      +' style="left:'+left.toFixed(2)+'%;top:'+top.toFixed(2)+'%;--k:'+k+'"><span class="rl">'+esc(it.label)+'</span></button>';
+      +' style="left:'+left.toFixed(2)+'%;top:'+top.toFixed(2)+'%;--k:'+k+'"><span class="rl">'+esc(it.label)+'</span>'+(it.k==='deck'?'<span class="rc">'+it.n+'/'+DECK_MAX+'</span>':'')+'</button>';
   }).join('');
   var cw=n<=4?52:n<=6?48:n<=8?44:n<=10?41:38;
   return {html:html,sz:Math.min(17,0.82*287/n),cw:cw};
@@ -1244,8 +1278,8 @@ function fillRing(id,still){
 }
 function autoChip(){return '<button class="chip'+(ST.auto?' on':'')+'" id="autochip" data-act="auto-toggle">Auto preview '+(ST.auto?'on':'off')+'</button>'}
 function pvHtml(id){
-  var real=(id&&String(id).length===11)?'<a class="btn" data-act="listen" href="https://music.youtube.com/watch?v='+encodeURIComponent(id)+'" target="_blank" rel="noopener">Open in YouTube Music</a>':'';
-  if(isSpot(id))real='<a class="btn" data-act="listen" href="https://open.spotify.com/track/'+encodeURIComponent(id)+'" target="_blank" rel="noopener">Open in Spotify</a>';
+  var real=(id&&String(id).length===11)?'<a class="btn" data-act="listen" href="https://music.youtube.com/watch?v='+encodeURIComponent(id)+'" target="_blank" rel="noopener"><span class="ol">Open in YouTube Music</span><span class="os">YT Music ↗</span></a>':'';
+  if(isSpot(id))real='<a class="btn" data-act="listen" href="https://open.spotify.com/track/'+encodeURIComponent(id)+'" target="_blank" rel="noopener"><span class="ol">Open in Spotify</span><span class="os">Spotify ↗</span></a>';
   return (YTP.ready&&!clipUrl(id)&&!isSpot(id)?'<div class="ytrow"><div class="ytslot" id="ytslot"></div></div>':'')+'<button class="btn" id="playbtn" data-act="toggle-play">'+(isPlaying()?'❚❚ Pause':'▶︎ Play')+'</button>'
     +'<span class="eq'+(isPlaying()?' on':'')+'" id="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>'+real
     +'<span class="mono" id="pvnote">'+pvNote()+'</span>';
@@ -1376,8 +1410,8 @@ function renderOverlay0(){
     var id=ST.radial.id;
     var rq=ST.radial.q,pos=rq?rq.indexOf(id)+1:0;
     el.innerHTML='<div class="ov"><div class="ov-top"><button class="btn ghost" data-act="close-radial">Close</button>'+(rq&&pos?'<span class="mono">Card '+pos+' of '+rq.length+'</span>':'')+autoChip()+'</div>'
-      +'<div class="stage"><div class="radial" id="radial"><div class="ring" id="ring"></div><div class="cwrap"><div class="cin">'+card(id,0)+'</div></div></div></div>'
-      +'<div class="dock"><div class="pv" id="pv">'+pvHtml(id)+'</div>'
+      +'<div class="stage"><div class="radial" id="radial"><div class="ring" id="ring"></div><div class="cwrap"><div class="cin">'+card(id,0,isLand()?'<div class="pv" id="pv">'+pvHtml(id)+'</div>':'')+'</div></div></div></div>'
+      +'<div class="dock">'+(isLand()?'':'<div class="pv" id="pv">'+pvHtml(id)+'</div>')
       +(ST.radial.q?(nextInQueue()===null?'<button class="btn" data-act="next-song" disabled>Last card reached</button>':'<button class="btn primary" data-act="next-song">Next song</button>'):'')+sortRowHtml()+'</div></div>';
     fillRing(id,false);
     return;
@@ -1393,8 +1427,8 @@ function renderOverlay0(){
     var dots=o.cards.map(function(_,k){return '<i class="'+(k<=o.i?'on':'')+'"></i>'}).join('');
     el.innerHTML='<div class="ov"><div class="ov-top"><span class="mono">Card '+(o.i+1)+' of '+o.cards.length+'</span><span class="tr">'+autoChip()+'<button class="btn ghost" data-act="skip">Skip rest</button></span></div>'
       +'<div class="stage"><div class="radial" id="radial"><div class="ring" id="ring"></div>'
-      +'<div class="cwrap"><div class="cin">'+card(c.id,0)+'</div></div></div></div>'
-      +'<div class="dock"><div class="pv" id="pv">'+pvHtml(c.id)+'</div>'
+      +'<div class="cwrap"><div class="cin">'+card(c.id,0,isLand()?'<div class="pv" id="pv">'+pvHtml(c.id)+'</div>':'')+'</div></div></div></div>'
+      +'<div class="dock">'+(isLand()?'':'<div class="pv" id="pv">'+pvHtml(c.id)+'</div>')
       +'<button class="btn primary" id="nextbtn" data-act="next">'+(last?'Finish':'Next card')+'</button>'+sortRowHtml()+'</div>'
       +'<div class="dots">'+dots+'</div></div>';
     fillRing(c.id,false);
