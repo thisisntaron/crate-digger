@@ -110,6 +110,7 @@ body:has(.ytslot) .radial{width:max(250px,min(94vw,460px,calc((100vh - 410px - 8
 .empty{grid-column:1/-1;color:var(--muted);padding:28px 0;text-align:center}
 
 /* packs */
+.packone{display:grid;justify-items:center;margin-top:26px}
 .packrow{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:16px;margin-top:18px}
 .pack{display:block;width:100%;padding:0;border:0;background:none;filter:drop-shadow(0 8px 14px rgba(0,0,0,.5));transition:transform .12s}
 .pack:active{transform:scale(.97)}
@@ -711,13 +712,20 @@ function toggleAuto(){
 }
 
 /* ---------- views ---------- */
+/* One random sealed pack is shown at a time. It stays put while you look at the tab and is picked again on a fresh visit. */
+function pickedPack(){
+  if(!S.packs.length){ST.pick=null;return null}
+  var p=ST.pick&&S.packs.find(function(x){return x.id===ST.pick});
+  if(!p){p=S.packs[Math.floor(Math.random()*S.packs.length)];ST.pick=p.id}
+  return p;
+}
 function viewPacks(){
-  var n=S.packs.length;
-  var packs=S.packs.map(function(p){return '<button class="pack" data-act="open-pack" data-id="'+p.id+'" aria-label="Open pack number '+p.id+'">'+packHtml(p)+'</button>'}).join('');
+  var n=S.packs.length,pk=pickedPack();
+  var packs=pk?'<button class="pack big" data-act="open-pack" data-id="'+pk.id+'" aria-label="Open pack number '+pk.id+'">'+packHtml(pk)+'</button>':'';
   var bad=SYNC.state==='error'?'<p class="syncmsg bad" style="margin:0 0 10px">'+esc(SYNC.msg||'Could not read your sheet.')+' See More.</p>':'';
   return cloudBar()+'<h2 class="h2">Packs</h2>'
-    +'<p class="sub">'+(n?n+' sealed '+(n===1?'pack':'packs')+'. Tap one to open it.':'No sealed packs right now. New songs from your sheet show up here as packs.')+'</p>'
-    +bad+(n?'<div class="packrow">'+packs+'</div>':'')+spotBox();
+    +'<p class="sub">'+(n?n+' sealed '+(n===1?'pack':'packs')+'. Tap the pack to open it.':'No sealed packs right now. New songs from your sheet show up here as packs.')+'</p>'
+    +bad+(n?'<div class="packone">'+packs+'</div>':'')+spotBox();
 }
 function spotBox(){
   if(!SPOT.length)return '';
@@ -1526,6 +1534,7 @@ document.addEventListener('click',function(e){
   switch(act){
     case 'tab':
       if(t.dataset.tab===ST.tab&&ST.tab==='decks')ST.deckId=null;
+      if(t.dataset.tab==='packs'&&ST.tab!=='packs')ST.pick=null;
       ST.tab=t.dataset.tab;ST.confirmDel=false;ST.confirmReset=false;render();window.scrollTo(0,0);break;
     case 'sync':fetchSheet(0);break;
     case 'save-backup':saveBackup();break;
@@ -1549,9 +1558,9 @@ document.addEventListener('click',function(e){
     case 'skip':sndStop();if(ST.open){ST.open.phase='summary';renderOverlay()}break;
     case 'again':
       sndStop();ST.open=null;
-      if(S.packs.length)beginOpen(S.packs[0].id);else renderOverlay();
+      if(S.packs.length)beginOpen(S.packs[Math.floor(Math.random()*S.packs.length)].id);else renderOverlay();
       render();break;
-    case 'done':sndStop();ST.open=null;renderOverlay();render();break;
+    case 'done':sndStop();ST.open=null;ST.pick=null;renderOverlay();render();break;
     case 'card':
       ST.radial={id:sid};
       ST.radial.q=Array.prototype.map.call(document.querySelectorAll('#grid .cardbtn'),function(b){return b.dataset.id});
