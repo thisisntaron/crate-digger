@@ -105,8 +105,10 @@ def clean_title(t):
 def apple(artist, title):
     first = re.split(r",|&| feat\.? ", artist)[0].strip()
     q = urllib.parse.urlencode({"term": clean_title(title) + " " + first, "entity": "song", "limit": 8})
-    data = get_json("https://itunes.apple.com/search?" + q)
+    data = get_json("https://itunes.apple.com/search?" + q, 1)
     time.sleep(PAUSE_APPLE)
+    if data is None:
+        return None  # Apple refused or timed out: not a real miss, so do not remember it
     best = None
     for r in (data or {}).get("results", []):
         if match(first, clean_title(title), r.get("artistName"), r.get("trackName")):
@@ -160,6 +162,7 @@ def main(argv):
     todo = [s for s in songs if s["i"] not in cache["songs"]][:n_do]
     done_before = len(cache["songs"])
     print("{} of {} songs done already. Doing the next {}.\n".format(done_before, len(songs), len(todo)))
+    fails = 0
     try:
         for n, s in enumerate(todo, 1):
             ak = s["a"].lower()
@@ -168,7 +171,17 @@ def main(argv):
                 tags = lastfm_tags(key, first)
                 cache["artists"][ak] = tags if tags is not None else []
             g = genre_from_tags(cache["artists"][ak])
-            p, u = apple(s["a"], s["t"])
+            res = apple(s["a"], s["t"])
+            if res is None:
+                fails += 1
+                print("  Apple did not answer for {} - {} (will retry next run)".format(s["a"], s["t"]), flush=True)
+                if fails >= 5:
+                    print("\nApple is limiting requests right now. Stopping. Wait 30 minutes, then run again.", flush=True)
+                    break
+                time.sleep(20)
+                continue
+            fails = 0
+            p, u = res
             cache["songs"][s["i"]] = {"g": g, "p": p, "u": u}
             if n % 10 == 0:
                 json.dump(cache, open(CACHE, "w"))
