@@ -159,6 +159,26 @@ def main(argv):
         cache = json.load(open(CACHE))
     except (OSError, ValueError):
         cache = {"songs": {}, "artists": {}}
+    # songs saved earlier with no genre because Last.fm did not answer: ask again
+    fixed = tried = 0
+    for s in songs:
+        c = cache["songs"].get(s["i"])
+        if not c or c.get("g"):
+            continue
+        ak = s["a"].lower()
+        if not cache["artists"].get(ak):
+            tags = lastfm_tags(key, re.split(r",", s["a"])[0].strip())
+            tried += 1
+            if tags is not None:
+                cache["artists"][ak] = tags
+        g = genre_from_tags(cache["artists"].get(ak) or [])
+        if g:
+            c["g"] = g
+            fixed += 1
+        if tried and tried % 50 == 0:
+            print("  genre retry: {} artists asked, {} songs fixed".format(tried, fixed), flush=True)
+    if tried or fixed:
+        print("Genre retry done: {} songs got a genre.\n".format(fixed), flush=True)
     todo = [s for s in songs if s["i"] not in cache["songs"]][:n_do]
     done_before = len(cache["songs"])
     print("{} of {} songs done already. Doing the next {}.\n".format(done_before, len(songs), len(todo)))
@@ -167,10 +187,11 @@ def main(argv):
         for n, s in enumerate(todo, 1):
             ak = s["a"].lower()
             first = re.split(r",", s["a"])[0].strip()
-            if ak not in cache["artists"]:
+            if not cache["artists"].get(ak):
                 tags = lastfm_tags(key, first)
-                cache["artists"][ak] = tags if tags is not None else []
-            g = genre_from_tags(cache["artists"][ak])
+                if tags is not None:
+                    cache["artists"][ak] = tags
+            g = genre_from_tags(cache["artists"].get(ak) or [])
             res = apple(s["a"], s["t"])
             if res is None:
                 fails += 1
