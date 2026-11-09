@@ -132,11 +132,33 @@ def load_key():
     return key
 
 
+def lastfm_probe(key):
+    """One quick test call so a Last.fm problem is reported clearly instead of hanging."""
+    q = urllib.parse.urlencode({"method": "artist.gettoptags", "artist": "Radiohead", "api_key": key, "format": "json"})
+    try:
+        req = urllib.request.Request("https://ws.audioscrobbler.com/2.0/?" + q, headers={"User-Agent": "crate-digger/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            d = json.loads(r.read().decode("utf-8"))
+        if d.get("error"):
+            return "Last.fm answered with error {}: {}".format(d.get("error"), d.get("message"))
+        return None
+    except urllib.error.HTTPError as e:
+        try:
+            body = json.loads(e.read().decode("utf-8"))
+            return "Last.fm refused (HTTP {}): error {} {}".format(e.code, body.get("error"), body.get("message"))
+        except Exception:
+            return "Last.fm refused (HTTP {})".format(e.code)
+    except Exception as e:
+        return "Could not reach Last.fm: {}".format(type(e).__name__)
+
+
 def lastfm_tags(key, artist):
     q = urllib.parse.urlencode({"method": "artist.gettoptags", "artist": artist, "api_key": key,
                                 "format": "json", "autocorrect": "1"})
-    d = get_json("https://ws.audioscrobbler.com/2.0/?" + q)
+    d = get_json("https://ws.audioscrobbler.com/2.0/?" + q, 1)
     time.sleep(PAUSE_LASTFM)
+    if d is not None and d.get("error"):
+        return None
     if d is None:
         return None
     tag = (d.get("toptags") or {}).get("tag") or []
@@ -148,6 +170,15 @@ def lastfm_tags(key, artist):
 def main(argv):
     n_do = int(argv[1]) if len(argv) > 1 else 300
     key = load_key()
+    print("Testing Last.fm...", flush=True)
+    problem = lastfm_probe(key)
+    if problem:
+        print("PROBLEM: " + problem, flush=True)
+        print("Genres cannot be looked up right now. Clips and art still can.", flush=True)
+        lastfm_ok = False
+    else:
+        print("Last.fm is answering.", flush=True)
+        lastfm_ok = True
     songs = None
     for a in range(3):
         songs = get_json(SRC, 1)
@@ -160,8 +191,8 @@ def main(argv):
     except (OSError, ValueError):
         cache = {"songs": {}, "artists": {}}
     # songs saved earlier with no genre because Last.fm did not answer: ask again
-    fixed = tried = 0
-    for s in songs:
+    fixed = tried = lf = 0
+    for s in (songs if lastfm_ok else []):
         c = cache["songs"].get(s["i"])
         if not c or c.get("g"):
             continue
@@ -171,13 +202,21 @@ def main(argv):
             tried += 1
             if tags is not None:
                 cache["artists"][ak] = tags
+                lf = 0
+            else:
+                lf += 1
+                if lf >= 8:
+                    print("  Last.fm stopped answering, so the genre retry is paused. Run again later.", flush=True)
+                    break
         g = genre_from_tags(cache["artists"].get(ak) or [])
         if g:
             c["g"] = g
             fixed += 1
         if tried and tried % 50 == 0:
             print("  genre retry: {} artists asked, {} songs fixed".format(tried, fixed), flush=True)
+            json.dump(cache, open(CACHE, "w"))
     if tried or fixed:
+        json.dump(cache, open(CACHE, "w"))
         print("Genre retry done: {} songs got a genre.\n".format(fixed), flush=True)
     todo = [s for s in songs if s["i"] not in cache["songs"]][:n_do]
     done_before = len(cache["songs"])
@@ -187,7 +226,7 @@ def main(argv):
         for n, s in enumerate(todo, 1):
             ak = s["a"].lower()
             first = re.split(r",", s["a"])[0].strip()
-            if not cache["artists"].get(ak):
+            if lastfm_ok and not cache["artists"].get(ak):
                 tags = lastfm_tags(key, first)
                 if tags is not None:
                     cache["artists"][ak] = tags
