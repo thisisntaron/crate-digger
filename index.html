@@ -99,6 +99,8 @@ input[type=search],input[type=text],select{width:100%;background:var(--surface);
 .cardbtn{content-visibility:auto;contain-intrinsic-size:auto 230px}
 a.btn{display:inline-flex;align-items:center;text-decoration:none}
 .syncmsg{margin:0;font-size:14px}
+.splitbox{margin:12px 0;padding:12px;border:1px solid var(--line,#ffffff22);border-radius:12px;background:hsl(var(--gh,220) 20% 50% / .08)}
+.splitbox .btn{width:100%}
 #ytbox{position:fixed;z-index:60;left:-400px;top:0;width:200px;height:113px;border-radius:10px;overflow:hidden;background:#000}
 #ytbox iframe{width:100%;height:100%;display:block;border:0}
 .ytrow{flex:0 0 100%;display:flex;justify-content:center}
@@ -1113,11 +1115,26 @@ function deckRowHtml(d){
   return '<li><button class="deckrow" data-act="open-deck" data-id="'+d.id+'"><span class="dn">'+esc(d.name||'Untitled deck')+'</span><span class="chev" aria-hidden="true">›</span>'
     +'<span class="dm">'+d.ids.length+(d.ids.length===1?' song':' songs')+rtx(d.ids)+tag+'</span>'+gbar(d.ids)+'</button></li>';
 }
+function bigDecks(){return S.decks.filter(function(d){return d.ids.length>DECK_MAX})}
+function splitHtml(){
+  var n=bigDecks().length;if(!n)return '';
+  return '<div class="splitbox"><p class="syncmsg" style="margin:0 0 8px">'+n+(n===1?' deck has':' decks have')+' more than '+DECK_MAX+' songs. Split '+(n===1?'it':'them')+' into Pt 1 and Pt 2 so '+(n===1?'it can':'they can')+' be exported again?</p>'
+    +'<button class="btn '+(ST.confirmSplit?'danger':'primary')+'" data-act="split-decks">'+(ST.confirmSplit?'Tap again to split '+n+(n===1?' deck':' decks'):'Split into Pt 1 and Pt 2')+'</button></div>';
+}
+function splitDecks(){
+  var made=0,n=0;
+  bigDecks().forEach(function(d){
+    var base=(d.name||'Deck').replace(/\s+Pt \d+$/,''),all=d.ids.slice(),i=S.decks.indexOf(d),part=1;
+    d.ids=all.splice(0,DECK_MAX);d.name=base+' Pt 1';delete d.ex;n++;
+    while(all.length){part++;made++;S.decks.splice(i+part-1,0,{id:S.nid++,name:base+' Pt '+part,ids:all.splice(0,DECK_MAX)})}
+  });
+  save();return {n:n,made:made};
+}
 function viewDecks(){
   if(ST.deckId)return viewDeck();
   var act=S.decks.filter(function(d){return !d.ex}),done=S.decks.filter(function(d){return d.ex});
   return '<div class="row-head"><h2 class="h2">Decks</h2><button class="btn primary" data-act="new-deck">New deck</button></div>'
-    +'<p class="sub">Every deck is a playlist of up to '+DECK_MAX+' songs. The bar shows its genre mix. When a deck fills up it is ready to export.</p>'
+    +'<p class="sub">Every deck is a playlist of up to '+DECK_MAX+' songs. The bar shows its genre mix. When a deck fills up it is ready to export.</p>'+splitHtml()
     +(act.length?'<ul class="decklist">'+act.map(deckRowHtml).join('')+'</ul>':'<p class="empty" style="margin-top:12px">'+(done.length?'No active decks.':'No decks yet. Make one, then add songs from your cards.')+'</p>')
     +(done.length?'<h3 class="h3 sect">Exported</h3><ul class="decklist">'+done.map(deckRowHtml).join('')+'</ul>':'');
 }
@@ -1147,6 +1164,7 @@ function viewDeck(){
     +(d.ids.length?'<ol class="tracks">'+rows+'</ol>':'<p class="empty" style="margin-top:12px">Empty deck. Tap Add songs to pull cards from your collection.</p>');
 }
 function render(){
+  if(ST.tab!=='decks'||ST.deckId)ST.confirmSplit=false;
   $('#stats').textContent=ownedIds().length+' cards · '+S.decks.length+(S.decks.length===1?' deck':' decks');
   document.querySelectorAll('.tab').forEach(function(b){
     var on=b.dataset.tab===ST.tab;b.classList.toggle('on',on);
@@ -1652,6 +1670,9 @@ document.addEventListener('click',function(e){
       d=newDeck();ST.deckId=d.id;ST.confirmDel=false;render();window.scrollTo(0,0);
       var inp=$('#deck-name');if(inp){inp.focus();inp.select()}
       break;
+    case 'split-decks':
+      if(!ST.confirmSplit){ST.confirmSplit=true;render();break}
+      ST.confirmSplit=false;var r=splitDecks();render();toast('Split '+r.n+(r.n===1?' deck':' decks')+' into '+(r.n+r.made)+' parts. Ready to export.');break;
     case 'open-deck':ST.deckId=id;ST.confirmDel=false;render();window.scrollTo(0,0);break;
     case 'back-decks':ST.deckId=null;ST.confirmDel=false;render();break;
     case 'add-songs':ST.sheet={type:'add'};ST.addq='';renderSheet(true);break;
