@@ -173,6 +173,18 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
 .sheet.enter{animation:up .25s ease-out}
 @keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
 .sheet.tall{height:82%;display:flex;flex-direction:column;overflow:hidden}
+#layer-sheet.above .sheet-bg{z-index:60}#layer-sheet.above .sheet{z-index:61}
+.sheet.pick{max-height:78%;overflow-y:auto}
+.trk .thumbbtn{border:0;background:none;padding:0;flex:none;position:relative;cursor:pointer}
+.trk .thumbbtn::after{content:'▶︎';position:absolute;inset:0;display:grid;place-items:center;font-size:15px;color:#fff;background:rgba(4,8,10,.38);border-radius:9px;opacity:0;transition:opacity .15s}
+.trk .thumbbtn:hover::after,.trk.playing .thumbbtn::after{opacity:1}
+.trk.playing .thumbbtn::after{content:'❚❚';font-size:12px}
+.trk.playing{border-color:hsl(var(--gh,170) 60% 55%)}
+.pickrow{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;padding:12px 14px;margin:0 0 8px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+.pickrow b{font-weight:600}.pickrow span{font:400 12px var(--font-mono);color:var(--muted)}
+.pickrow[disabled]{opacity:.45}
+.rit{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.rs{display:none}
 .sheet-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .addlist{list-style:none;margin:12px 0 0;padding:0;overflow-y:auto;flex:1;min-height:0;display:grid;gap:8px;align-content:start}
 .arow{display:flex;align-items:center;gap:10px;padding:6px 0}
@@ -247,6 +259,8 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
   .ov:has(#radial) .ring{grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:calc((100% - 40px) / 5);gap:10px}
   .ov:has(#radial) .rit{font-size:14.5px;padding:6px 8px;border-radius:14px}
   .ov:has(#radial) .rit .rc{font-size:12px}
+  .ov:has(#radial) .rit .rs{display:flex;flex-direction:column;gap:1px;width:100%;margin-top:3px;font:400 11.5px/1.25 var(--font-body);opacity:.62;text-align:center}
+  .ov:has(#radial) .rit .rs i{font-style:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 }
 /* desktop-size windows: wider tiles so playlist names stay readable */
 @media (min-width:1200px) and (min-height:600px){
@@ -650,6 +664,15 @@ function schedule(P,t0){
 function updatePlayUi(){
   var b=$('#playbtn');if(b)b.textContent=isPlaying()?'❚❚ Pause':'▶︎ Play';
   var q=$('#eq');if(q)q.classList.toggle('on',isPlaying());
+  var now=CLIP.playing?CLIP.id:(snd.playing?snd.id:null);
+  document.querySelectorAll('.trk[data-id]').forEach(function(r){r.classList.toggle('playing',now!==null&&r.dataset.id===String(now))});
+}
+function rowPlay(sid){
+  var now=CLIP.playing?CLIP.id:(snd.playing?snd.id:null);
+  if(now!==null&&String(now)===String(sid)){sndStop();return}
+  sndStop();
+  if(!clipPlay(sid))sndStart(sid);
+  updatePlayUi();
 }
 function synthStop(){
   snd.playing=false;clearTimeout(snd.timer);
@@ -1183,10 +1206,11 @@ function viewDeck(){
   var mix=gcounts(d.ids).map(function(x){return x.n+' '+x.g.toLowerCase()}).join(', ');
   var rows=d.ids.map(function(id,i){
     var s=SONGS[id],last=i===d.ids.length-1;
-    return '<li class="trk"><span class="no">'+(i+1)+'</span>'+thumb(id)
+    return '<li class="trk" data-id="'+id+'" style="--gh:'+GEN[s.g].h+'"><span class="no">'+(i+1)+'</span><button class="thumbbtn" data-act="row-play" data-id="'+id+'" aria-label="Play preview of '+esc(s.t)+'">'+thumb(id)+'</button>'
       +'<span class="tt"><b>'+esc(s.t)+'</b><span>'+esc(s.a)+' · '+esc(s.g)+(s.d?' · '+esc(s.d):'')+'</span></span>'
       +'<span class="mv"><button class="ib" data-act="up" data-i="'+i+'" aria-label="Move up"'+(i===0?' disabled':'')+'>↑</button>'
       +'<button class="ib" data-act="down" data-i="'+i+'" aria-label="Move down"'+(last?' disabled':'')+'>↓</button>'
+      +'<button class="ib" data-act="move" data-id="'+id+'" aria-label="Move to another deck">⇄</button>'
       +'<button class="ib" data-act="rm" data-i="'+i+'" aria-label="Remove from deck">×</button></span></li>';
   }).join('');
   return '<button class="back" data-act="back-decks">‹ All decks</button>'
@@ -1298,10 +1322,47 @@ function addRows(){
     return '<li class="arow">'+thumb(id)+'<span class="tt"><b>'+esc(s.t)+'</b><span>'+esc(s.a)+' · '+esc(s.g)+'</span></span><button class="btn" data-act="add-one" data-id="'+id+'">Add</button></li>';
   }).join('');
 }
+function pickSheetHtml(){
+  var sid=ST.sheet.sid,s=SONGS[sid],cur=deckOf(sid);
+  var rows=S.decks.filter(function(d){return d!==cur&&!d.ex}).map(function(d){
+    var full=deckFull(d);
+    return '<button class="pickrow" data-act="move-to" data-id="'+d.id+'"'+(full?' disabled':'')+'><b>'+esc(d.name||'Untitled deck')+'</b><span>'+d.ids.length+'/'+DECK_MAX+(full?' full':'')+'</span></button>';
+  }).join('');
+  return '<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet pick" role="dialog" aria-label="Move song">'
+    +'<div class="sheet-head"><h3 class="h3">Move to</h3><button class="btn" data-act="close-sheet">Cancel</button></div>'
+    +'<p class="sub" style="margin:0 0 12px">'+esc(s?s.t:'')+(s?' · '+esc(s.a):'')+'</p>'
+    +(rows||'<p class="empty">No other open decks.</p>')
+    +'<button class="pickrow" data-act="move-junk" data-id="'+esc(sid)+'"><b>Junk</b><span>stop seeing it</span></button></div>';
+}
+function peekSongs(d){
+  var cid=curCardId(),g=(cid!==null&&SONGS[cid])?SONGS[cid].g:null;
+  var ids=d.ids.slice().reverse().filter(function(x){return SONGS[x]});
+  var same=g?ids.filter(function(x){return SONGS[x].g===g}):[];
+  return {g:g,ids:same.concat(ids.filter(function(x){return same.indexOf(x)<0})).slice(0,5),same:same.length};
+}
+function peekSheetHtml(){
+  var d=S.decks.find(function(x){return x.id===ST.sheet.did});
+  if(!d)return '';
+  var pk=peekSongs(d),cid=curCardId();
+  var rows=pk.ids.map(function(id){
+    var s=SONGS[id];
+    return '<li class="trk" data-id="'+id+'" style="--gh:'+GEN[s.g].h+'"><button class="thumbbtn" data-act="row-play" data-id="'+id+'" aria-label="Play preview of '+esc(s.t)+'">'+thumb(id)+'</button>'
+      +'<span class="tt"><b>'+esc(s.t)+'</b><span>'+esc(s.a)+' · '+esc(s.g)+'</span></span></li>';
+  }).join('');
+  var inIt=cid!==null&&d.ids.indexOf(cid)>=0;
+  return '<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet" role="dialog" aria-label="Songs in this deck">'
+    +'<div class="sheet-head"><h3 class="h3">'+esc(d.name||'Untitled deck')+' <span class="mono" style="font-weight:400;font-size:13px">'+d.ids.length+'/'+DECK_MAX+'</span></h3><button class="btn" data-act="close-sheet">Close</button></div>'
+    +(pk.ids.length?'<p class="sub" style="margin:0 0 4px">'+(pk.same?'Showing '+esc(pk.g)+' songs first. Tap a cover to hear it.':'None are '+esc(pk.g||'the same genre')+'. Showing the latest. Tap a cover to hear it.')+'</p><ol class="tracks" style="margin-top:10px">'+rows+'</ol>':'<p class="empty">This deck is empty.</p>')
+    +(cid!==null?'<button class="btn '+(inIt?'':'primary')+'" style="width:100%;margin-top:14px" data-act="peek-add" data-id="'+d.id+'"'+(!inIt&&!deckOpen(d)?' disabled':'')+'>'+(inIt?'Remove current song from here':'Add current song here')+'</button>':'')
+    +'</div>';
+}
 function renderSheet(anim){
   var el=$('#layer-sheet');
   lock();
+  el.classList.toggle('above',!!(ST.sheet&&(ST.sheet.type==='peek')));
   if(!ST.sheet){el.innerHTML='';return}
+  if(ST.sheet.type==='peek'){el.innerHTML=peekSheetHtml();if(anim){var shp=$('.sheet',el);if(shp)shp.classList.add('enter')}return}
+  if(ST.sheet.type==='move'){el.innerHTML=pickSheetHtml();if(anim){var shm=$('.sheet',el);if(shm)shm.classList.add('enter')}return}
   if(ST.sheet.type==='junk'){el.innerHTML=junkSheetHtml();if(anim){var sh1=$('.sheet',el);if(sh1)sh1.classList.add('enter')}return}
   if(ST.sheet.type==='export'){el.innerHTML=exportSheetHtml();if(anim){var sh0=$('.sheet',el);if(sh0)sh0.classList.add('enter')}return}
   el.innerHTML='<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet tall" role="dialog" aria-label="Add songs">'
@@ -1314,13 +1375,13 @@ function renderSheet(anim){
 /* ---------- radial menu ---------- */
 function ringHtml(id){
   var items=[];
-  S.decks.filter(deckOpen).forEach(function(d){items.push({k:'deck',id:d.id,label:d.name||'Untitled deck',on:d.ids.indexOf(id)>=0,n:d.ids.length})});
+  S.decks.filter(deckOpen).forEach(function(d){items.push({k:'deck',id:d.id,label:d.name||'Untitled deck',on:d.ids.indexOf(id)>=0,n:d.ids.length,last:d.ids.slice(-2).reverse().map(function(x){return SONGS[x]?SONGS[x].t:''}).filter(Boolean)})});
   var n=Math.max(items.length,1);
   var html=items.map(function(it,k){
     var th=-Math.PI/2+k*2*Math.PI/n;
     var left=50+41*Math.cos(th),top=50+41.67*Math.sin(th);
     return '<button class="rit '+it.k+(it.on?' on':'')+'" data-act="ring-'+it.k+'"'+(it.k==='deck'?' data-id="'+it.id+'" aria-pressed="'+(it.on?'true':'false')+'"':'')
-      +' style="left:'+left.toFixed(2)+'%;top:'+top.toFixed(2)+'%;--k:'+k+'"><span class="rl">'+esc(it.label)+'</span>'+(it.k==='deck'?'<span class="rc">'+it.n+'/'+DECK_MAX+'</span>':'')+'</button>';
+      +' style="left:'+left.toFixed(2)+'%;top:'+top.toFixed(2)+'%;--k:'+k+'"><span class="rl">'+esc(it.label)+'</span>'+(it.k==='deck'?'<span class="rc">'+it.n+'/'+DECK_MAX+'</span>':'')+(it.k==='deck'&&it.last&&it.last.length?'<span class="rs">'+it.last.map(function(t){return '<i>'+esc(t)+'</i>'}).join('')+'</span>':'')+'</button>';
   }).join('');
   var cw=n<=4?52:n<=6?48:n<=8?44:n<=10?41:38;
   return {html:html,sz:Math.min(17,0.82*287/n),cw:cw};
@@ -1621,6 +1682,23 @@ function copyDeck(){
   });
 }
 
+/* press and hold a playlist tile to peek at its songs */
+var LP={t:null,x:0,y:0,sup:false,supT:null};
+function lpClear(){clearTimeout(LP.t);LP.t=null}
+document.addEventListener('pointerdown',function(e){
+  var b=e.target.closest&&e.target.closest('.rit[data-act="ring-deck"]');if(!b)return;
+  LP.x=e.clientX;LP.y=e.clientY;lpClear();
+  LP.t=setTimeout(function(){
+    LP.t=null;LP.sup=true;clearTimeout(LP.supT);LP.supT=setTimeout(function(){LP.sup=false},1500);
+    ST.sheet={type:'peek',did:+b.dataset.id};renderSheet(true);
+  },420);
+},true);
+document.addEventListener('pointermove',function(e){if(LP.t&&(Math.abs(e.clientX-LP.x)>10||Math.abs(e.clientY-LP.y)>10))lpClear()},true);
+['pointerup','pointercancel','scroll'].forEach(function(n){document.addEventListener(n,lpClear,true)});
+document.addEventListener('contextmenu',function(e){if(e.target.closest&&e.target.closest('.rit'))e.preventDefault()},true);
+document.addEventListener('click',function(e){
+  if(LP.sup&&e.target.closest&&e.target.closest('.rit[data-act="ring-deck"]')){LP.sup=false;e.stopPropagation();e.preventDefault()}
+},true);
 document.addEventListener('click',function(e){
   var t=e.target.closest('[data-act]');if(!t)return;
   var act=t.dataset.act,sid=t.dataset.id,id=+sid,i=+t.dataset.i,d,cid;
@@ -1628,6 +1706,7 @@ document.addEventListener('click',function(e){
     case 'tab':
       if(t.dataset.tab===ST.tab&&ST.tab==='decks')ST.deckId=null;
       if(t.dataset.tab==='packs'&&ST.tab!=='packs')ST.pick=null;
+      if(!ST.open&&!ST.radial)sndStop();
       ST.tab=t.dataset.tab;ST.confirmDel=false;ST.confirmReset=false;render();window.scrollTo(0,0);break;
     case 'sync':fetchSheet(0);break;
     case 'save-backup':saveBackup();break;
@@ -1713,9 +1792,29 @@ document.addEventListener('click',function(e){
       if(!ST.confirmSplit){ST.confirmSplit=true;render();break}
       ST.confirmSplit=false;var r=splitDecks();render();toast('Split '+r.n+(r.n===1?' deck':' decks')+' into '+(r.n+r.made)+' parts. Ready to export.');break;
     case 'open-deck':ST.deckId=id;ST.confirmDel=false;render();window.scrollTo(0,0);break;
-    case 'back-decks':ST.deckId=null;ST.confirmDel=false;render();break;
+    case 'back-decks':sndStop();ST.deckId=null;ST.confirmDel=false;render();break;
     case 'add-songs':ST.sheet={type:'add'};ST.addq='';renderSheet(true);break;
-    case 'close-sheet':ST.sheet=null;renderSheet();break;
+    case 'close-sheet':if(ST.sheet&&(ST.sheet.type==='peek'||ST.sheet.type==='move'))sndStop();ST.sheet=null;renderSheet();break;
+    case 'row-play':rowPlay(sid);break;
+    case 'move':ST.sheet={type:'move',sid:sid};renderSheet(true);break;
+    case 'move-to':
+      d=S.decks.find(function(x){return x.id===id});
+      if(d&&ST.sheet&&ST.sheet.sid){
+        var ms=ST.sheet.sid;
+        if(deckFull(d)&&d.ids.indexOf(ms)<0){toast(d.name+' is full');break}
+        leaveOtherDecks(ms,d);if(d.ids.indexOf(ms)<0)d.ids.push(ms);
+        save();ST.sheet=null;renderSheet();render();toast('Moved to '+d.name);
+      }
+      break;
+    case 'move-junk':
+      if(ST.sheet&&ST.sheet.sid){junkSong(ST.sheet.sid);sndStop();ST.sheet=null;renderSheet();render();toast('Moved to Junk')}
+      break;
+    case 'peek-add':
+      sndStop();ST.sheet=null;renderSheet();
+      LP.sup=false;
+      var tile=document.querySelector('.rit[data-act="ring-deck"][data-id="'+sid+'"]');
+      if(tile)tile.click();
+      break;
     case 'add-one':
       d=curDeck();
       if(d&&d.ids.indexOf(sid)<0&&!deckFull(d)){
