@@ -68,9 +68,12 @@ def main():
     want = None
     if arg == "decks":
         import glob
-        files = sorted(glob.glob(os.path.join(HOME, "Downloads", "crate-digger-backup*.json")), key=os.path.getmtime)
+        files = []
+        for folder in ("Downloads", "Documents", "Desktop"):
+            files += glob.glob(os.path.join(HOME, folder, "crate-digger-backup*.json"))
+        files.sort(key=os.path.getmtime)
         if not files:
-            sys.exit("No crate-digger-backup*.json in Downloads. Make a backup in the app first.")
+            sys.exit("No crate-digger-backup*.json in Downloads, Documents or Desktop. Make a backup in the app first.")
         st = json.load(open(files[-1]))["state"]
         want = {i for d in st.get("decks", []) for i in d.get("ids", [])}
         print("Using %s: %d songs in decks" % (os.path.basename(files[-1]), len(want)), flush=True)
