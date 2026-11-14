@@ -1397,7 +1397,8 @@ function renderSheet(anim){
 
 /* ---------- radial menu ---------- */
 function artistKeys(a){return String(a||'').toLowerCase().split(/\s*(?:,|&|\+|\bfeat\.?|\bft\.?|\bwith\b|\bx\b)\s*/).map(function(x){return x.trim()}).filter(Boolean)}
-/* Recommended decks for a song: same artist already in the deck ranks highest, then the deck's share of the song's genre (40%+, never "Other"). Top 3, empty decks skipped. */
+/* Recommended decks for a song: same artist already in the deck ranks highest, then the deck's share of the song's genre (40%+, never "Other"). Top REC_MAX (6), empty decks skipped. */
+var REC_MAX=6;
 function recDecks(id){
   var s=SONGS[id];if(!s)return [];
   var mine=artistKeys(s.a),out=[];
@@ -1413,7 +1414,7 @@ function recDecks(id){
     if(sc>0)out.push({id:d.id,sc:sc,n:d.ids.length});
   });
   out.sort(function(a,b){return b.sc-a.sc||b.n-a.n});
-  return out.slice(0,3).map(function(x){return x.id});
+  return out.slice(0,REC_MAX).map(function(x){return x.id});
 }
 function ringHtml(id){
   var items=[];
@@ -1428,7 +1429,7 @@ function ringHtml(id){
   }
   var html='';
   if(land&&recs.length){
-    html+='<div class="recwrap"><span class="rechd">Recommended</span><div class="recrow">'
+    html+='<div class="recwrap" style="grid-row:span '+Math.ceil(recs.length/3)+'"><span class="rechd">Recommended</span><div class="recrow">'
       +recs.map(function(rid,j){var it=items.filter(function(x){return x.id===rid})[0];return it?tile(it,j,false,' rec'):''}).join('')+'</div></div>';
   }
   html+=items.map(function(it,k){return tile(it,k,!land,(!land&&recs.indexOf(it.id)>=0)?' rec':'')}).join('');
