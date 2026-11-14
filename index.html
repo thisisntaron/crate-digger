@@ -236,6 +236,10 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
   .ov:has(#radial) .rit:active{transform:scale(.95)}
   .ov:has(#radial) .rit .rl{-webkit-line-clamp:2;line-clamp:2}
   .ov:has(#radial) .rit .rc{display:block;font:500 10px/1 var(--font-mono);opacity:.75}
+  .ov:has(#radial) .recwrap{grid-column:1/-1;display:flex;flex-direction:column;gap:3px;min-height:0;padding-bottom:6px;border-bottom:1px dashed var(--line)}
+  .ov:has(#radial) .rechd{font:600 10px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);flex:0 0 auto}
+  .ov:has(#radial) .recrow{flex:1;min-height:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  .ov:has(#radial) .rit.rec{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 0 12px color-mix(in srgb,var(--accent) 45%,transparent)}
 }
 @keyframes popg{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
 
@@ -320,6 +324,7 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
 .rit.on .rl::before{content:"\2713\00a0"}
 .rit.none{border-style:dashed;background:transparent;color:var(--muted)}
 .rit.new{border-style:dashed;background:transparent}
+.rit.rec{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 0 14px color-mix(in srgb,var(--accent) 50%,transparent)}
 .rit.recycle{background:transparent;color:var(--danger);border-color:var(--danger)}
 @keyframes pop{from{opacity:0;transform:translate(-50%,-50%) scale(.3)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
 .dock{display:flex;flex-direction:column;align-items:center;gap:10px;padding-top:8px;min-height:84px;flex:none}
@@ -1373,16 +1378,42 @@ function renderSheet(anim){
 }
 
 /* ---------- radial menu ---------- */
+function artistKeys(a){return String(a||'').toLowerCase().split(/\s*(?:,|&|\+|\bfeat\.?|\bft\.?|\bwith\b|\bx\b)\s*/).map(function(x){return x.trim()}).filter(Boolean)}
+/* Recommended decks for a song: same artist already in the deck ranks highest, then the deck's share of the song's genre (40%+, never "Other"). Top 3, empty decks skipped. */
+function recDecks(id){
+  var s=SONGS[id];if(!s)return [];
+  var mine=artistKeys(s.a),out=[];
+  S.decks.filter(deckOpen).forEach(function(d){
+    if(!d.ids.length||d.ids.indexOf(id)>=0)return;
+    var am=0,gm=0;
+    d.ids.forEach(function(x){var o=SONGS[x];if(!o)return;
+      if(artistKeys(o.a).some(function(k){return mine.indexOf(k)>=0}))am++;
+      if(s.g!=='Other'&&o.g===s.g)gm++});
+    var share=gm/d.ids.length,sc=0;
+    if(am>0)sc=100+Math.min(am,5)*10+share*10;
+    else if(share>=0.4&&gm>=2)sc=share*100;
+    if(sc>0)out.push({id:d.id,sc:sc,n:d.ids.length});
+  });
+  out.sort(function(a,b){return b.sc-a.sc||b.n-a.n});
+  return out.slice(0,3).map(function(x){return x.id});
+}
 function ringHtml(id){
   var items=[];
   S.decks.filter(deckOpen).forEach(function(d){items.push({k:'deck',id:d.id,label:d.name||'Untitled deck',on:d.ids.indexOf(id)>=0,n:d.ids.length,last:d.ids.slice(-2).reverse().map(function(x){return SONGS[x]?SONGS[x].t:''}).filter(Boolean)})});
   var n=Math.max(items.length,1);
-  var html=items.map(function(it,k){
+  var recs=recDecks(id),land=isLand();
+  function tile(it,k,pos,cls){
     var th=-Math.PI/2+k*2*Math.PI/n;
-    var left=50+41*Math.cos(th),top=50+41.67*Math.sin(th);
-    return '<button class="rit '+it.k+(it.on?' on':'')+'" data-act="ring-'+it.k+'"'+(it.k==='deck'?' data-id="'+it.id+'" aria-pressed="'+(it.on?'true':'false')+'"':'')
-      +' style="left:'+left.toFixed(2)+'%;top:'+top.toFixed(2)+'%;--k:'+k+'"><span class="rl">'+esc(it.label)+'</span>'+(it.k==='deck'?'<span class="rc">'+it.n+'/'+DECK_MAX+'</span>':'')+(it.k==='deck'&&it.last&&it.last.length?'<span class="rs">'+it.last.map(function(t){return '<i>'+esc(t)+'</i>'}).join('')+'</span>':'')+'</button>';
-  }).join('');
+    var st=pos?' style="left:'+(50+41*Math.cos(th)).toFixed(2)+'%;top:'+(50+41.67*Math.sin(th)).toFixed(2)+'%;--k:'+k+'"':' style="--k:'+k+'"';
+    return '<button class="rit '+it.k+(it.on?' on':'')+(cls||'')+'" data-act="ring-'+it.k+'"'+(it.k==='deck'?' data-id="'+it.id+'" aria-pressed="'+(it.on?'true':'false')+'"':'')
+      +st+'><span class="rl">'+esc(it.label)+'</span>'+(it.k==='deck'?'<span class="rc">'+it.n+'/'+DECK_MAX+'</span>':'')+(it.k==='deck'&&it.last&&it.last.length?'<span class="rs">'+it.last.map(function(t){return '<i>'+esc(t)+'</i>'}).join('')+'</span>':'')+'</button>';
+  }
+  var html='';
+  if(land&&recs.length){
+    html+='<div class="recwrap"><span class="rechd">Recommended</span><div class="recrow">'
+      +recs.map(function(rid,j){var it=items.filter(function(x){return x.id===rid})[0];return it?tile(it,j,false,' rec'):''}).join('')+'</div></div>';
+  }
+  html+=items.map(function(it,k){return tile(it,k,!land,(!land&&recs.indexOf(it.id)>=0)?' rec':'')}).join('');
   var cw=n<=4?52:n<=6?48:n<=8?44:n<=10?41:38;
   return {html:html,sz:Math.min(17,0.82*287/n),cw:cw};
 }
