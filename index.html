@@ -455,8 +455,15 @@ function spotTick(){
   var m=mergeRows(rowsCache||[]);
   if(m.packs){toast(m.packs+(m.packs===1?' new pack':' new packs')+' ready to open');softRender()}
 }
+/* Exact YouTube Music video ids for Spotify songs (ytmap.json: {spotifyId:[videoId,score]}), made by tools/yt_match.py. */
+var YTMAP={};
+function loadYtMap(){
+  try{fetch('ytmap.json').then(function(r){return r.ok?r.json():null}).then(function(j){if(j)YTMAP=j}).catch(function(){})}catch(e){}
+}
+function ytId(id){return String(id).length===11?String(id):(YTMAP[id]&&YTMAP[id][0])||''}
 function loadSpot(){
   try{
+    loadYtMap();
     fetch('spotify.json').then(function(r){return r.ok?r.json():null}).then(function(j){
       if(!j||!j.length)return;
       SPOT=j;SPX={};j.forEach(function(e){SPX[e.i]=e});
@@ -1277,6 +1284,12 @@ function deckCsv(d){
   d.ids.forEach(function(id){var s=SONGS[id];out.push([s.t,s.a,'',songLink(id)].map(csvCell).join(','))});
   return out.join('\r\n')+'\r\n';
 }
+function ytSplit(d){
+  var ok=[],miss=[];
+  d.ids.forEach(function(id){var v=ytId(id);if(v)ok.push(v);else if(SONGS[id])miss.push(SONGS[id])});
+  return {ok:ok,miss:miss};
+}
+function ytUrl(d){return 'https://www.youtube.com/watch_videos?video_ids='+ytSplit(d).ok.join(',')}
 function exportName(d){return (String(d.name||'playlist').replace(/[^A-Za-z0-9 _-]+/g,'').trim()||'playlist')+'.csv'}
 function exportSheetHtml(){
   var d=curDeck();if(!d)return '';
@@ -1285,7 +1298,12 @@ function exportSheetHtml(){
     +'<ol class="steps"><li><b>Download the file.</b> It lists '+d.ids.length+' songs with title, artist and a link.</li>'
     +'<li><b>Open TuneMyMusic.</b> Choose File as the source, upload it, pick YouTube Music as the destination and sign in.</li>'
     +'<li><b>Come back here</b> and tap Mark as exported to archive this deck.</li></ol>'
-    +'<div class="actions"><button class="btn primary" data-act="export-csv">Download CSV</button>'
+    +(function(){var y=ytSplit(d);if(!y.ok.length)return '';
+      return '<div class="ytx"><p class="syncmsg" style="margin:0 0 8px"><b>Exact songs:</b> '+y.ok.length+' of '+d.ids.length+' have a verified YouTube Music video, so this route cannot pick the wrong band.'
+        +(y.miss.length?' Not matched ('+y.miss.length+'), add by hand: '+y.miss.map(function(s){return esc(s.t+' / '+s.a)}).join('; ')+'.':'')
+        +'</p><div class="actions"><button class="btn primary" data-act="yt-playlist">Open exact songs on YouTube</button></div>'
+        +'<p class="sub" style="margin:6px 0 12px">Opens a playlist of those videos. Tap Save playlist there and it lands in your YouTube Music library.</p></div>'})()
+    +'<div class="actions"><button class="btn'+(ytSplit(d).ok.length?'':' primary')+'" data-act="export-csv">Download CSV</button>'
     +'<a class="btn" href="https://www.tunemymusic.com/transfer/csv-to-youtube-music" target="_blank" rel="noopener">Open TuneMyMusic</a>'
     +'<button class="btn" data-act="copy-sheet">Copy as text</button></div>'
     +(d.ex?'<p class="syncmsg" style="margin-top:12px">Already marked as exported.</p>':'<div class="actions"><button class="btn" data-act="mark-exported">Mark as exported</button></div>')
@@ -1856,6 +1874,7 @@ document.addEventListener('click',function(e){
       break;
     case 'copy':copyDeck();break;
     case 'export':ST.sheet={type:'export'};renderSheet(true);break;
+    case 'yt-playlist':{d=curDeck();if(d&&ytSplit(d).ok.length)window.open(ytUrl(d),'_blank','noopener');break}
     case 'export-csv':exportCsv();break;
     case 'copy-sheet':{d=curDeck();if(d){var tx=deckText(d);try{navigator.clipboard.writeText(tx).then(function(){toast('Playlist text copied')},function(){toast('Could not copy')})}catch(e2){toast('Could not copy')}}break}
     case 'mark-exported':d=curDeck();if(d){d.ex=Date.now();save();ST.sheet=null;renderSheet();ST.deckId=null;render();toast(d.name+' moved to Exported')}break;
