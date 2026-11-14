@@ -1204,11 +1204,87 @@ function splitDecks(){
   });
   save();return {n:n,made:made};
 }
+
+/* ---------- fuse decks ---------- */
+function artistMap(d){
+  var m={};
+  d.ids.forEach(function(id){var o=SONGS[id];if(!o)return;
+    String(o.a||'').split(/\s*(?:,|&|\+|\bfeat\.?|\bft\.?|\bwith\b|\bx\b)\s*/i).forEach(function(x){x=x.trim();if(x)m[x.toLowerCase()]=m[x.toLowerCase()]||x})});
+  return m;
+}
+function genreShare(d){
+  var m={};d.ids.forEach(function(id){var o=SONGS[id];if(o&&o.g!=='Other')m[o.g]=(m[o.g]||0)+1});
+  Object.keys(m).forEach(function(g){m[g]/=d.ids.length});return m;
+}
+/* Similarity of two decks: shared artists (weighted most) plus how much their genre mixes overlap. */
+function deckSim(a,b){
+  var am=artistMap(a),bm=artistMap(b),shared=Object.keys(am).filter(function(k){return bm[k]}).map(function(k){return am[k]});
+  var na=Object.keys(am).length,nb=Object.keys(bm).length;
+  var artist=shared.length/Math.max(1,Math.min(na,nb));
+  var ga=genreShare(a),gb=genreShare(b),gov=0,top=null,topv=0;
+  Object.keys(ga).forEach(function(g){if(gb[g]){var v=Math.min(ga[g],gb[g]);gov+=v;if(v>topv){topv=v;top=g}}});
+  var sc=0.6*artist+0.4*gov,total=a.ids.length+b.ids.length;
+  var ok=(shared.length>0||gov>=0.6)&&sc>=0.3&&total<=DECK_MAX*2;
+  var why=[];
+  if(shared.length)why.push('Shares '+shared.slice(0,3).join(', ')+(shared.length>3?' +'+(shared.length-3):''));
+  if(gov>=0.3&&top)why.push(Math.round(gov*100)+'% same genre mix ('+top+')');
+  return {sc:sc+(total<=DECK_MAX?0.1:0),ok:ok,why:why.join(' · ')||'Similar mix',total:total};
+}
+function fusePairs(){
+  var ds=S.decks.filter(function(d){return !d.ex&&d.ids.length}),out=[];
+  for(var i=0;i<ds.length;i++)for(var j=i+1;j<ds.length;j++){
+    var r=deckSim(ds[i],ds[j]);if(r.ok)out.push({a:ds[i],b:ds[j],sc:r.sc,why:r.why,total:r.total});
+  }
+  out.sort(function(x,y){return y.sc-x.sc});
+  return out.slice(0,8);
+}
+function fuseDecks(aid,bid,name){
+  var a=S.decks.find(function(x){return x.id===aid}),b=S.decks.find(function(x){return x.id===bid});
+  if(!a||!b||a===b)return null;
+  b.ids.forEach(function(id){if(a.ids.indexOf(id)<0)a.ids.push(id)});
+  a.name=name;delete a.ex;
+  S.decks=S.decks.filter(function(x){return x!==b});
+  save();return a;
+}
+function pairRowHtml(a,b,why,total){
+  return '<button class="pickrow" data-act="fuse-go" data-a="'+a.id+'" data-b="'+b.id+'" style="flex-direction:column;align-items:flex-start">'
+    +'<b>'+esc(a.name||'Untitled deck')+' + '+esc(b.name||'Untitled deck')+'</b>'
+    +'<span>'+a.ids.length+' + '+b.ids.length+' = '+total+(total>DECK_MAX?' (needs a split)':'')+(why?' · '+esc(why):'')+'</span></button>';
+}
+function fuseSheetHtml(){
+  var sh=ST.sheet,body='',title='Fuse decks';
+  if(sh.type==='fuse'){
+    var ps=fusePairs();
+    body='<p class="sub" style="margin:0 0 12px">Decks that look alike. Pick a pair to merge into one.</p>'
+      +(ps.length?ps.map(function(p){return pairRowHtml(p.a,p.b,p.why,p.total)}).join(''):'<p class="empty">No similar decks right now. You can still fuse by hand from inside a deck.</p>');
+  }else if(sh.type==='fusepick'){
+    var a=S.decks.find(function(x){return x.id===sh.a});
+    title='Fuse with...';
+    var rows=S.decks.filter(function(x){return a&&x!==a}).map(function(x){var r=deckSim(a,x);return {d:x,r:r}});
+    rows.sort(function(p,q){return q.r.sc-p.r.sc});
+    body='<p class="sub" style="margin:0 0 12px">Merge <b>'+esc(a?a.name:'')+'</b> with another deck. Most similar first.</p>'
+      +(rows.length?rows.map(function(p){var x=p.d,t=a.ids.length+x.ids.length;
+        return '<button class="pickrow" data-act="fuse-go" data-a="'+a.id+'" data-b="'+x.id+'" style="flex-direction:column;align-items:flex-start"><b>'+esc(x.name||'Untitled deck')+(x.ex?' (exported)':'')+'</b><span>'+x.ids.length+' songs · '+t+' together'+(t>DECK_MAX?' (needs a split)':'')+(p.r.why&&p.r.sc>=0.15?' · '+esc(p.r.why):'')+'</span></button>'}).join(''):'<p class="empty">No other decks.</p>');
+  }else{
+    var A=S.decks.find(function(x){return x.id===sh.a}),B=S.decks.find(function(x){return x.id===sh.b});
+    if(!A||!B)return '';
+    var tot=A.ids.filter(function(x){return B.ids.indexOf(x)<0}).length+B.ids.length;
+    title='Name the fused deck';
+    body='<p class="sub" style="margin:0 0 10px">'+esc(A.name)+' ('+A.ids.length+') + '+esc(B.name)+' ('+B.ids.length+') = '+tot+' songs.'+(tot>DECK_MAX?' That is over '+DECK_MAX+', so you will get a Split into Pt 1 and Pt 2 button on the Decks screen.':'')+'</p>'
+      +((A.ex||B.ex)?'<p class="syncmsg" style="margin:0 0 10px">One of these was already exported. The fused deck counts as a new deck and is not exported yet, so export it again. The old playlist on YouTube Music stays as it is.</p>':'')
+      +'<div class="actions" style="margin:0 0 10px"><button class="btn" data-act="fuse-name-set" data-name="'+esc(A.name)+'">Use "'+esc(A.name)+'"</button><button class="btn" data-act="fuse-name-set" data-name="'+esc(B.name)+'">Use "'+esc(B.name)+'"</button></div>'
+      +'<input id="fuse-name" class="deckname" type="text" maxlength="40" value="'+esc(A.name)+'" aria-label="Fused deck name" autocomplete="off">'
+      +'<button class="btn primary" style="width:100%;margin-top:12px" data-act="fuse-confirm" data-a="'+A.id+'" data-b="'+B.id+'">Fuse into one deck</button>';
+  }
+  return '<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet'+(sh.type==='fusename'?'':' tall')+'" role="dialog" aria-label="'+title+'">'
+    +'<div class="sheet-head"><h3 class="h3">'+title+'</h3><button class="btn" data-act="close-sheet">Cancel</button></div>'+body+'</div>';
+}
 function viewDecks(){
   if(ST.deckId)return viewDeck();
   var act=S.decks.filter(function(d){return !d.ex}),done=S.decks.filter(function(d){return d.ex});
   return '<div class="row-head"><h2 class="h2">Decks</h2><button class="btn primary" data-act="new-deck">New deck</button></div>'
     +'<p class="sub">Every deck is a playlist of up to '+DECK_MAX+' songs. The bar shows its genre mix. When a deck fills up it is ready to export.</p>'+splitHtml()
+    +(function(){var n=fusePairs().length;return n?'<button class="btn" style="width:100%;margin:12px 0 0" data-act="fuse-open">Fuse similar decks ('+n+(n===1?' pair':' pairs')+')</button>':''})()
     +(act.length?'<ul class="decklist">'+act.map(deckRowHtml).join('')+'</ul>':'<p class="empty" style="margin-top:12px">'+(done.length?'No active decks.':'No decks yet. Make one, then add songs from your cards.')+'</p>')
     +(done.length?'<h3 class="h3 sect">Exported</h3><ul class="decklist">'+done.map(deckRowHtml).join('')+'</ul>':'');
 }
@@ -1233,6 +1309,7 @@ function viewDeck(){
     +'<div class="actions">'
     +(d.ex?'<button class="btn primary" data-act="reopen">Reopen deck</button>':'<button class="btn primary" data-act="add-songs"'+(deckFull(d)?' disabled':'')+'>Add songs</button>')
     +'<button class="btn'+(deckFull(d)&&!d.ex?' primary':'')+'" data-act="export"'+(d.ids.length?'':' disabled')+'>Export</button>'
+    +'<button class="btn" data-act="fuse-pick"'+(S.decks.length>1?'':' disabled')+'>Fuse with...</button>'
     +'<button class="btn" data-act="copy"'+(d.ids.length?'':' disabled')+'>Copy as text</button>'
     +'<button class="btn danger" data-act="del">'+(ST.confirmDel?'Tap again to delete':'Delete deck')+'</button></div>'
     +'<textarea id="export" class="export" readonly hidden rows="8" aria-label="Playlist text"></textarea>'
@@ -1387,6 +1464,7 @@ function renderSheet(anim){
   if(ST.sheet.type==='peek'){el.innerHTML=peekSheetHtml();if(anim){var shp=$('.sheet',el);if(shp)shp.classList.add('enter')}return}
   if(ST.sheet.type==='move'){el.innerHTML=pickSheetHtml();if(anim){var shm=$('.sheet',el);if(shm)shm.classList.add('enter')}return}
   if(ST.sheet.type==='junk'){el.innerHTML=junkSheetHtml();if(anim){var sh1=$('.sheet',el);if(sh1)sh1.classList.add('enter')}return}
+  if(/^fuse/.test(ST.sheet.type)){el.innerHTML=fuseSheetHtml();if(anim){var shf=$('.sheet',el);if(shf)shf.classList.add('enter')}return}
   if(ST.sheet.type==='export'){el.innerHTML=exportSheetHtml();if(anim){var sh0=$('.sheet',el);if(sh0)sh0.classList.add('enter')}return}
   el.innerHTML='<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet tall" role="dialog" aria-label="Add songs">'
     +'<div class="sheet-head"><h3 class="h3">Add songs</h3><button class="btn" data-act="close-sheet">Done</button></div>'
@@ -1841,6 +1919,15 @@ document.addEventListener('click',function(e){
     case 'split-decks':
       if(!ST.confirmSplit){ST.confirmSplit=true;render();break}
       ST.confirmSplit=false;var r=splitDecks();render();toast('Split '+r.n+(r.n===1?' deck':' decks')+' into '+(r.n+r.made)+' parts. Ready to export.');break;
+    case 'fuse-open':ST.sheet={type:'fuse'};renderSheet(true);break;
+    case 'fuse-pick':d=curDeck();if(d){ST.sheet={type:'fusepick',a:d.id};renderSheet(true)}break;
+    case 'fuse-go':ST.sheet={type:'fusename',a:+t.dataset.a,b:+t.dataset.b};renderSheet(true);break;
+    case 'fuse-name-set':var fi=$('#fuse-name');if(fi){fi.value=t.dataset.name;fi.focus()}break;
+    case 'fuse-confirm':
+      var fn=($('#fuse-name').value||'').trim()||'Fused deck',fa=fuseDecks(+t.dataset.a,+t.dataset.b,fn);
+      ST.sheet=null;renderSheet();
+      if(fa){ST.deckId=null;ST.tab='decks';render();toast('Fused into '+fa.name+' ('+fa.ids.length+' songs)'+(fa.ids.length>DECK_MAX?'. Use Split to make it exportable.':''))}
+      break;
     case 'open-deck':ST.deckId=id;ST.confirmDel=false;render();window.scrollTo(0,0);break;
     case 'back-decks':sndStop();ST.deckId=null;ST.confirmDel=false;render();break;
     case 'add-songs':ST.sheet={type:'add'};ST.addq='';renderSheet(true);break;
