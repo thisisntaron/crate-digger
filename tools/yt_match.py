@@ -8,6 +8,9 @@ Run (Mac Terminal, or through the launcher):
   python3 yt_match.py            next 400 songs that are not matched yet
   python3 yt_match.py 1000       next 1000
   python3 yt_match.py all        everything left
+  python3 yt_match.py decks      only songs that are in your decks (uses the newest
+                                 crate-digger-backup*.json in Downloads, so make a fresh
+                                 backup in the app first: More, Back up)
 
 First run makes a small private Python environment in ~/.crate-digger-tools/venv
 and installs ytmusicapi there (no key, no login). Ctrl-C is safe: answers are
@@ -61,10 +64,21 @@ def main():
     boot()
     from ytmusicapi import YTMusic
     arg = sys.argv[1] if len(sys.argv) > 1 else "400"
-    limit = 10 ** 9 if arg == "all" else int(arg)
+    limit = 10 ** 9 if arg in ("all", "decks") else int(arg)
+    want = None
+    if arg == "decks":
+        import glob
+        files = sorted(glob.glob(os.path.join(HOME, "Downloads", "crate-digger-backup*.json")), key=os.path.getmtime)
+        if not files:
+            sys.exit("No crate-digger-backup*.json in Downloads. Make a backup in the app first.")
+        st = json.load(open(files[-1]))["state"]
+        want = {i for d in st.get("decks", []) for i in d.get("ids", [])}
+        print("Using %s: %d songs in decks" % (os.path.basename(files[-1]), len(want)), flush=True)
     cache = json.load(open(CACHE)) if os.path.exists(CACHE) else {}
     req = urllib.request.Request(SRC + "?cb=" + str(int(time.time())), headers={"User-Agent": "crate-digger/1.0"})
     songs = [s for s in json.load(urllib.request.urlopen(req, timeout=60)) if s.get("d")]
+    if want is not None:
+        songs = [s for s in songs if s["i"] in want]
     todo = [s for s in songs if s["i"] not in cache]
     print("%d Spotify songs, %d already checked, doing the next %d" % (len(songs), len(songs) - len(todo), min(limit, len(todo))), flush=True)
     yt = YTMusic()
