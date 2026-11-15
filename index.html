@@ -143,6 +143,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 .rdy{color:var(--accent)}
 .sect{margin-top:28px}
 .steps{margin:12px 0 4px;padding-left:20px;display:grid;gap:8px;font-size:14px}
+.tagsongs{margin-top:0!important}
 .decklist{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:10px}
 .deckrow{width:100%;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:14px;display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center}
 .dn{font:800 18px/1.2 var(--font-display);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1291,11 +1292,34 @@ function fuseSheetHtml(){
   return '<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet pick" role="dialog" aria-label="'+title+'">'
     +'<div class="sheet-head"><h3 class="h3">'+title+'</h3><button class="btn" data-act="close-sheet">Cancel</button></div>'+body+'</div>';
 }
+/* ---------- quick mood tagging ---------- */
+function untaggedDecks(){return S.decks.filter(function(d){return !d.mood&&!d.ex&&d.ids.length})}
+function tagSheetHtml(){
+  var sh=ST.sheet,q=sh.q||[],i=sh.i,body='',title='Tag moods';
+  var d=S.decks.find(function(x){return x.id===q[i]});
+  if(i>=q.length||!d){
+    body='<p class="sub" style="margin:0 0 12px">All done. '+(sh.n||0)+(sh.n===1?' deck':' decks')+' tagged'+(untaggedDecks().length?', '+untaggedDecks().length+' skipped.':'.')+'</p>'
+      +'<button class="btn primary" style="width:100%" data-act="close-sheet">Close</button>';
+  }else{
+    title='Tag moods · '+(i+1)+' of '+q.length;
+    var rows=d.ids.slice(0,5).map(function(id){var o=SONGS[id];if(!o)return '';
+      return '<li class="trk" data-id="'+id+'" style="--gh:'+GEN[o.g].h+'"><button class="thumbbtn" data-act="row-play" data-id="'+id+'" aria-label="Play preview of '+esc(o.t)+'">'+thumb(id)+'</button>'
+        +'<span class="tt"><b>'+esc(o.t)+'</b><span>'+esc(o.a)+' · '+esc(o.g)+'</span></span></li>'}).join('');
+    body='<h3 class="h3" style="margin:0 0 4px">'+esc(d.name||'Untitled deck')+'</h3>'
+      +'<p class="sub mono" style="margin:0 0 8px">'+d.ids.length+(d.ids.length===1?' song':' songs')+(d.ids.length>5?', showing 5':'')+'</p>'
+      +'<ul class="decklist tagsongs">'+rows+'</ul>'
+      +'<div class="moodrow" role="group" aria-label="Pick a mood">'+moodPickerHtml('','tag-mood')+'</div>'
+      +'<div class="actions" style="margin-top:12px">'+(i>0?'<button class="btn" data-act="tag-back">Back</button>':'')+'<button class="btn" data-act="tag-skip">Skip</button></div>';
+  }
+  return '<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet pick" role="dialog" aria-label="Tag moods">'
+    +'<div class="sheet-head"><h3 class="h3">'+title+'</h3><button class="btn" data-act="close-sheet">Close</button></div>'+body+'</div>';
+}
 function viewDecks(){
   if(ST.deckId)return viewDeck();
   var act=S.decks.filter(function(d){return !d.ex}),done=S.decks.filter(function(d){return d.ex});
   return '<div class="row-head"><h2 class="h2">Decks</h2><button class="btn primary" data-act="new-deck">New deck</button></div>'
     +'<p class="sub">Every deck is a playlist of up to '+DECK_MAX+' songs. The bar shows its genre mix. When a deck fills up it is ready to export.</p>'+splitHtml()
+    +(function(){var n=untaggedDecks().length;return n?'<button class="btn" style="width:100%;margin:12px 0 0" data-act="tag-open">Tag moods ('+n+' without one)</button>':''})()
     +(function(){var n=fusePairs().length;return n?'<button class="btn" style="width:100%;margin:12px 0 0" data-act="fuse-open">Fuse similar decks ('+n+(n===1?' pair':' pairs')+')</button>':''})()
     +(act.length?'<ul class="decklist">'+act.map(deckRowHtml).join('')+'</ul>':'<p class="empty" style="margin-top:12px">'+(done.length?'No active decks.':'No decks yet. Make one, then add songs from your cards.')+'</p>')
     +(done.length?'<h3 class="h3 sect">Exported</h3><ul class="decklist">'+done.map(deckRowHtml).join('')+'</ul>':'');
@@ -1477,6 +1501,7 @@ function renderSheet(anim){
   if(ST.sheet.type==='peek'){el.innerHTML=peekSheetHtml();if(anim){var shp=$('.sheet',el);if(shp)shp.classList.add('enter')}return}
   if(ST.sheet.type==='move'){el.innerHTML=pickSheetHtml();if(anim){var shm=$('.sheet',el);if(shm)shm.classList.add('enter')}return}
   if(ST.sheet.type==='junk'){el.innerHTML=junkSheetHtml();if(anim){var sh1=$('.sheet',el);if(sh1)sh1.classList.add('enter')}return}
+  if(/^tag$/.test(ST.sheet.type)){el.innerHTML=tagSheetHtml();if(anim){var sht=$('.sheet',el);if(sht)sht.classList.add('enter')}return}
   if(/^fuse/.test(ST.sheet.type)){el.innerHTML=fuseSheetHtml();if(anim){var shf=$('.sheet',el);if(shf)shf.classList.add('enter')}return}
   if(ST.sheet.type==='export'){el.innerHTML=exportSheetHtml();if(anim){var sh0=$('.sheet',el);if(sh0)sh0.classList.add('enter')}return}
   el.innerHTML='<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet tall" role="dialog" aria-label="Add songs">'
@@ -1974,7 +1999,11 @@ document.addEventListener('click',function(e){
     case 'open-deck':ST.deckId=id;ST.confirmDel=false;render();window.scrollTo(0,0);break;
     case 'back-decks':sndStop();ST.deckId=null;ST.confirmDel=false;render();break;
     case 'add-songs':ST.sheet={type:'add'};ST.addq='';renderSheet(true);break;
-    case 'close-sheet':if(ST.sheet&&(ST.sheet.type==='peek'||ST.sheet.type==='move'))sndStop();ST.sheet=null;renderSheet();break;
+    case 'close-sheet':if(ST.sheet&&(ST.sheet.type==='peek'||ST.sheet.type==='move'||ST.sheet.type==='tag'))sndStop();var wasTag=ST.sheet&&ST.sheet.type==='tag';ST.sheet=null;renderSheet();if(wasTag)render();break;
+    case 'tag-open':ST.sheet={type:'tag',q:untaggedDecks().map(function(x){return x.id}),i:0,n:0};renderSheet(true);break;
+    case 'tag-mood':{sndStop();var tq=ST.sheet,td=S.decks.find(function(x){return x.id===tq.q[tq.i]});if(td){td.mood=t.dataset.mood;save();tq.n++}tq.i++;renderSheet();break}
+    case 'tag-skip':sndStop();ST.sheet.i++;renderSheet();break;
+    case 'tag-back':sndStop();if(ST.sheet.i>0)ST.sheet.i--;renderSheet();break;
     case 'row-play':rowPlay(sid);break;
     case 'move':ST.sheet={type:'move',sid:sid};renderSheet(true);break;
     case 'move-to':
