@@ -442,13 +442,11 @@ function pad3(n){return String(n).padStart(3,'0')}
 /* ---------- state ---------- */
 /* songs: id -> {id,t,a,g}; seen: ids already turned into packs, so only new rows ever become packs.
    The id is the YouTube video id from the link, so the same song never appears twice. */
-/* old mood names from earlier versions, mapped to the current list (empty string means drop the tag) */
-var MOOD_OLD={upbeat:'dancy',driving:'energetic',romantic:''};
 function fresh(){return {seq:0,nid:1,owned:{},packs:[],decks:[],songs:{},seen:{},junk:{}}}
 function load(){
   try{
     var raw=localStorage.getItem(KEY);
-    if(raw){var d=JSON.parse(raw);if(d&&d.owned&&d.packs&&d.decks&&d.songs&&d.seen){d.decks.forEach(function(k){if(k.mood&&MOOD_OLD.hasOwnProperty(k.mood)){if(MOOD_OLD[k.mood])k.mood=MOOD_OLD[k.mood];else delete k.mood}});var u={};d.decks.forEach(function(k){k.ids=k.ids.filter(function(i){if(u[i])return false;u[i]=1;return true})});return d}}
+    if(raw){var d=JSON.parse(raw);if(d&&d.owned&&d.packs&&d.decks&&d.songs&&d.seen){if(d.moodv!==2){d.decks.forEach(function(k){delete k.mood});(d.roads||[]).forEach(function(r){if(r.cfg)r.cfg.moods={}});d.moodv=2}var u={};d.decks.forEach(function(k){k.ids=k.ids.filter(function(i){if(u[i])return false;u[i]=1;return true})});return d}}
   }catch(e){}
   return null;
 }
@@ -1295,7 +1293,7 @@ function fuseSheetHtml(){
     +'<div class="sheet-head"><h3 class="h3">'+title+'</h3><button class="btn" data-act="close-sheet">Cancel</button></div>'+body+'</div>';
 }
 /* ---------- roadtrips: long playlists built from several decks ---------- */
-var MIN_PER_SONG=3.5,ROAD_ORDERS=[{k:'up',n:'Calm to intense'},{k:'down',n:'Intense to calm'},{k:'decks',n:'Deck by deck'},{k:'shuffle',n:'Shuffled'}],ROAD_HOURS=[2,3,4,5,6,8,10];
+var MIN_PER_SONG=3.5,ROAD_ORDERS=[{k:'up',n:'Low to high energy'},{k:'down',n:'High to low energy'},{k:'decks',n:'Deck by deck'},{k:'shuffle',n:'Shuffled'}],ROAD_HOURS=[2,3,4,5,6,8,10];
 function roads(){if(!S.roads)S.roads=[];return S.roads}
 function fmtLen(n){var m=Math.round(n*MIN_PER_SONG/5)*5,h=Math.floor(m/60);return (h?h+'h ':'')+(m%60?m%60+'m':'')||'0m'}
 function seededShuffle(a,seed){
