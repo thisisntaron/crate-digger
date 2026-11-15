@@ -246,7 +246,7 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
 
 /* iPad and other large touch screens: same layout, roomier. Landscape = card left, tiles right. Portrait = card on top, tiles below. */
 @media (min-width:700px) and (min-height:521px){
-  .ov:has(#radial){grid-template-columns:minmax(0,1fr) 430px;grid-template-rows:auto minmax(0,1fr) auto auto;column-gap:18px;row-gap:10px;padding-left:max(18px,env(safe-area-inset-left,0px),calc((100vw - 1320px) / 2));padding-right:max(18px,env(safe-area-inset-right,0px),calc((100vw - 1320px) / 2));padding-top:max(14px,env(safe-area-inset-top,0px));padding-bottom:max(14px,env(safe-area-inset-bottom,0px))}
+  .ov:has(#radial){grid-template-columns:minmax(0,2fr) minmax(0,3fr);grid-template-rows:auto minmax(0,1fr) auto auto;column-gap:18px;row-gap:10px;padding-left:max(18px,env(safe-area-inset-left,0px),calc((100vw - 1320px) / 2));padding-right:max(18px,env(safe-area-inset-right,0px),calc((100vw - 1320px) / 2));padding-top:max(14px,env(safe-area-inset-top,0px));padding-bottom:max(14px,env(safe-area-inset-bottom,0px))}
   .ov:has(#radial) .ov-top .btn,.ov:has(#radial) .ov-top .chip{min-height:42px;font-size:15px}
   .ov:has(#radial) .card{align-self:center;height:100%;max-height:400px}
   .ov:has(#radial) .card-in{inset:12px;column-gap:16px;grid-template-columns:min(calc(100cqh - 24px),47cqw) minmax(0,1fr)}
@@ -259,10 +259,10 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
   .ov:has(#radial) .cpv .btn{min-height:42px;padding:8px 14px;font-size:15px}
   .ov:has(#radial) .cpv .ytslot{width:176px}
   .ov:has(#radial) .cpv #pvnote{font-size:12.5px}
-  .ov:has(#radial) .dock .btn.primary,.ov:has(#radial) .dock .btn[data-act=next-song]{min-height:58px;font-size:18px}
-  .ov:has(#radial) .sortrow .btn{min-height:50px;font-size:15px}
+  .ov:has(#radial) .dock .btn.primary,.ov:has(#radial) .dock .btn[data-act=next-song]{min-height:50px;font-size:17px}
+  .ov:has(#radial) .sortrow .btn{min-height:44px;font-size:14px}
   .ov:has(#radial) .rsearch{min-height:44px}
-  .ov:has(#radial) .ring{grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:calc((100% - 40px) / 5);gap:10px}
+  .ov:has(#radial) .ring{grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:calc((100% - 30px) / 4);gap:10px}
   .ov:has(#radial) .rit{font-size:14.5px;padding:6px 8px;border-radius:14px}
   .ov:has(#radial) .rit .rc{font-size:12px}
   .ov:has(#radial) .rit .rs{display:flex;flex-direction:column;gap:1px;width:100%;margin-top:3px;font:400 11.5px/1.25 var(--font-body);opacity:.62;text-align:center}
@@ -284,7 +284,7 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
   .ov:has(#radial) .dock .btn.primary,.ov:has(#radial) .dock .btn[data-act=next-song]{grid-column:1;grid-row:3}
   .ov:has(#radial) .sortrow{grid-column:1;grid-row:4}
   .ov:has(#radial) .rwrap{grid-column:1;grid-row:5;margin-top:6px}
-  .ov:has(#radial) .ring{grid-auto-rows:calc((100% - 30px) / 4)}
+  .ov:has(#radial) .ring{grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:calc((100% - 30px) / 4)}
 }
 
 /* phone held upright: card on top, a scrolling two-column grid of playlist tiles below */
