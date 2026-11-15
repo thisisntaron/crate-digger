@@ -442,11 +442,13 @@ function pad3(n){return String(n).padStart(3,'0')}
 /* ---------- state ---------- */
 /* songs: id -> {id,t,a,g}; seen: ids already turned into packs, so only new rows ever become packs.
    The id is the YouTube video id from the link, so the same song never appears twice. */
+/* old mood names from earlier versions, mapped to the current list (empty string means drop the tag) */
+var MOOD_OLD={upbeat:'dancy',driving:'energetic',romantic:''};
 function fresh(){return {seq:0,nid:1,owned:{},packs:[],decks:[],songs:{},seen:{},junk:{}}}
 function load(){
   try{
     var raw=localStorage.getItem(KEY);
-    if(raw){var d=JSON.parse(raw);if(d&&d.owned&&d.packs&&d.decks&&d.songs&&d.seen){var u={};d.decks.forEach(function(k){k.ids=k.ids.filter(function(i){if(u[i])return false;u[i]=1;return true})});return d}}
+    if(raw){var d=JSON.parse(raw);if(d&&d.owned&&d.packs&&d.decks&&d.songs&&d.seen){d.decks.forEach(function(k){if(k.mood&&MOOD_OLD.hasOwnProperty(k.mood)){if(MOOD_OLD[k.mood])k.mood=MOOD_OLD[k.mood];else delete k.mood}});var u={};d.decks.forEach(function(k){k.ids=k.ids.filter(function(i){if(u[i])return false;u[i]=1;return true})});return d}}
   }catch(e){}
   return null;
 }
@@ -1628,9 +1630,9 @@ function renderSheet(anim){
 function artistKeys(a){return String(a||'').toLowerCase().split(/\s*(?:,|&|\+|\bfeat\.?|\bft\.?|\bwith\b|\bx\b)\s*/).map(function(x){return x.trim()}).filter(Boolean)}
 /* Recommended decks for a song: same artist already in the deck ranks highest, then the deck's share of the song's genre (40%+, never "Other"). Top REC_MAX (6), empty decks skipped. */
 var REC_MAX=6;
-/* Moods, ordered from calm to intense. Each playlist can carry one; tiles sort in this order and wear the colour. */
-var MOODS=[{k:'chill',n:'Chill',h:195},{k:'dreamy',n:'Dreamy',h:268},{k:'sad',n:'Sad',h:232},{k:'romantic',n:'Romantic',h:335},
-  {k:'upbeat',n:'Upbeat',h:48},{k:'driving',n:'Driving',h:150},{k:'energetic',n:'Energetic',h:24},{k:'angry',n:'Angry',h:2}];
+/* Moods, ordered low to high energy. Each playlist can carry one; tiles sort in this order and wear the colour. */
+var MOODS=[{k:'sad',n:'Sad',h:225},{k:'ponderous',n:'Ponderous',h:252},{k:'dreamy',n:'Dreamy',h:285},{k:'chill',n:'Chill',h:188},
+  {k:'angsty',n:'Angsty',h:320},{k:'dancy',n:'Dancy',h:50},{k:'energetic',n:'Energetic',h:24},{k:'angry',n:'Angry',h:2}];
 function moodOf(d){for(var i=0;i<MOODS.length;i++)if(MOODS[i].k===(d&&d.mood))return MOODS[i];return null}
 function moodRank(d){var m=moodOf(d);return m?MOODS.indexOf(m):99}
 function moodChip(d){var m=moodOf(d);return m?'<span class="mchip" style="--mh:'+m.h+'">'+m.n+'</span>':''}
