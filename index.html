@@ -1276,7 +1276,7 @@ function fuseSheetHtml(){
       +'<input id="fuse-name" class="deckname" type="text" maxlength="40" value="'+esc(A.name)+'" aria-label="Fused deck name" autocomplete="off">'
       +'<button class="btn primary" style="width:100%;margin-top:12px" data-act="fuse-confirm" data-a="'+A.id+'" data-b="'+B.id+'">Fuse into one deck</button>';
   }
-  return '<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet'+(sh.type==='fusename'?'':' tall')+'" role="dialog" aria-label="'+title+'">'
+  return '<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet pick" role="dialog" aria-label="'+title+'">'
     +'<div class="sheet-head"><h3 class="h3">'+title+'</h3><button class="btn" data-act="close-sheet">Cancel</button></div>'+body+'</div>';
 }
 function viewDecks(){
