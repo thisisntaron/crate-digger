@@ -324,6 +324,13 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
 
 /* playlist tiles */
 .cin{width:100%;animation:rise .35s ease-out}
+.mchip{display:inline-block;vertical-align:middle;margin-left:6px;padding:2px 8px;border-radius:99px;font:700 10px/1.3 var(--font-display);letter-spacing:.06em;text-transform:uppercase;background:hsl(var(--mh) 60% 22%);color:hsl(var(--mh) 85% 78%);border:1px solid hsl(var(--mh) 55% 42%)}
+.moodrow{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
+.mpick{font:600 12px/1 var(--font-body);padding:7px 10px;border-radius:99px;border:1.5px solid hsl(var(--mh) 55% 45%);background:transparent;color:hsl(var(--mh) 80% 75%)}
+.mpick.on{background:hsl(var(--mh) 65% 55%);border-color:hsl(var(--mh) 65% 55%);color:#111}
+#namepanel .moodrow{padding-bottom:2px}
+.deckrow.mood{border-left:6px solid hsl(var(--mh) 65% 55%)}
+.ov:has(#radial) .rit.mood{border-left:6px solid hsl(var(--mh) 65% 58%)}
 .rit[hidden],.recwrap[hidden]{display:none!important}
 .rit{border:1.5px solid var(--line);background:var(--surface-2);color:var(--fg);text-align:center}
 .ring.still .rit{animation:none}
@@ -1190,7 +1197,8 @@ function renderGrid(){
 }
 function deckRowHtml(d){
   var tag=d.ex?' · exported':deckFull(d)?' · <span class="rdy">ready to export</span>':' · '+(DECK_MAX-d.ids.length)+' to go';
-  return '<li><button class="deckrow" data-act="open-deck" data-id="'+d.id+'"><span class="dn">'+esc(d.name||'Untitled deck')+'</span><span class="chev" aria-hidden="true">›</span>'
+  var mo=moodOf(d);
+  return '<li><button class="deckrow'+(mo?' mood':'')+'"'+(mo?' style="--mh:'+mo.h+'"':'')+' data-act="open-deck" data-id="'+d.id+'"><span class="dn">'+esc(d.name||'Untitled deck')+(mo?' '+moodChip(d):'')+'</span><span class="chev" aria-hidden="true">›</span>'
     +'<span class="dm">'+d.ids.length+(d.ids.length===1?' song':' songs')+rtx(d.ids)+tag+'</span>'+gbar(d.ids)+'</button></li>';
 }
 function bigDecks(){return S.decks.filter(function(d){return d.ids.length>DECK_MAX})}
@@ -1246,7 +1254,7 @@ function fuseDecks(aid,bid,name){
   var a=S.decks.find(function(x){return x.id===aid}),b=S.decks.find(function(x){return x.id===bid});
   if(!a||!b||a===b)return null;
   b.ids.forEach(function(id){if(a.ids.indexOf(id)<0)a.ids.push(id)});
-  a.name=name;delete a.ex;
+  a.name=name;delete a.ex;if(!a.mood&&b.mood)a.mood=b.mood;
   S.decks=S.decks.filter(function(x){return x!==b});
   save();return a;
 }
@@ -1307,6 +1315,7 @@ function viewDeck(){
   }).join('');
   return '<button class="back" data-act="back-decks">‹ All decks</button>'
     +'<input id="deck-name" class="deckname" type="text" maxlength="40" value="'+esc(d.name)+'" aria-label="Deck name" autocomplete="off">'
+    +'<div class="moodrow" role="group" aria-label="Mood">'+moodPickerHtml(d.mood,'set-mood')+'</div>'
     +'<p class="sub mono" style="margin:8px 0 10px">'+d.ids.length+(d.ids.length===1?' song':' songs')+rtx(d.ids)+'</p>'
     +gbar(d.ids)+(mix?'<p class="mono" style="margin:6px 0 0">'+esc(mix)+'</p>':'')
     +(d.ex?'<p class="syncmsg" style="margin:10px 0 0">Exported '+esc(new Date(d.ex).toLocaleDateString())+'. This deck is archived.</p>':deckFull(d)?'<p class="syncmsg rdy" style="margin:10px 0 0">Full at '+DECK_MAX+' songs. Ready to export.</p>':'')
@@ -1375,7 +1384,7 @@ function exportName(d){return (String(d.name||'playlist').replace(/[^A-Za-z0-9 _
 function exportSheetHtml(){
   var d=curDeck();if(!d)return '';
   return '<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet" role="dialog" aria-label="Export deck">'
-    +'<div class="sheet-head"><h3 class="h3">Export '+esc(d.name||'deck')+'</h3><button class="btn" data-act="close-sheet">Close</button></div>'
+    +'<div class="sheet-head"><h3 class="h3">Export '+esc(d.name||'deck')+' '+moodChip(d)+'</h3><button class="btn" data-act="close-sheet">Close</button></div>'
     +'<ol class="steps"><li><b>Download the file.</b> It lists '+d.ids.length+' songs with title, artist and a link.</li>'
     +'<li><b>Open TuneMyMusic.</b> Choose File as the source, upload it, pick YouTube Music as the destination and sign in.</li>'
     +'<li><b>Come back here</b> and tap Mark as exported to archive this deck.</li></ol>'
@@ -1481,18 +1490,42 @@ function renderSheet(anim){
 function artistKeys(a){return String(a||'').toLowerCase().split(/\s*(?:,|&|\+|\bfeat\.?|\bft\.?|\bwith\b|\bx\b)\s*/).map(function(x){return x.trim()}).filter(Boolean)}
 /* Recommended decks for a song: same artist already in the deck ranks highest, then the deck's share of the song's genre (40%+, never "Other"). Top REC_MAX (6), empty decks skipped. */
 var REC_MAX=6;
+/* Moods, ordered from calm to intense. Each playlist can carry one; tiles sort in this order and wear the colour. */
+var MOODS=[{k:'chill',n:'Chill',h:195},{k:'dreamy',n:'Dreamy',h:268},{k:'sad',n:'Sad',h:232},{k:'romantic',n:'Romantic',h:335},
+  {k:'upbeat',n:'Upbeat',h:48},{k:'driving',n:'Driving',h:150},{k:'energetic',n:'Energetic',h:24},{k:'angry',n:'Angry',h:2}];
+function moodOf(d){for(var i=0;i<MOODS.length;i++)if(MOODS[i].k===(d&&d.mood))return MOODS[i];return null}
+function moodRank(d){var m=moodOf(d);return m?MOODS.indexOf(m):99}
+function moodChip(d){var m=moodOf(d);return m?'<span class="mchip" style="--mh:'+m.h+'">'+m.n+'</span>':''}
+function moodPickerHtml(cur,act){
+  return MOODS.map(function(m){return '<button type="button" class="mpick'+(cur===m.k?' on':'')+'" data-act="'+act+'" data-mood="'+m.k+'" style="--mh:'+m.h+'">'+m.n+'</button>'}).join('');
+}
+/* Recommended decks for a song. Score: same artist already in the deck (strongest), then the deck's share of the song's genre.
+   Mood is a lighter nudge: the mood most common in decks that hold this artist or genre is "expected", and a deck with that mood gets a bonus
+   that can lift a close genre match but never outranks a same-artist deck. Top REC_MAX, empty decks skipped. */
 function recDecks(id){
   var s=SONGS[id];if(!s)return [];
-  var mine=artistKeys(s.a),out=[];
-  S.decks.filter(deckOpen).forEach(function(d){
-    if(!d.ids.length||d.ids.indexOf(id)>=0)return;
+  var mine=artistKeys(s.a),out=[],votes={},vt=0;
+  function stat(d){
     var am=0,gm=0;
-    d.ids.forEach(function(x){var o=SONGS[x];if(!o)return;
+    d.ids.forEach(function(x){var o=SONGS[x];if(!o||x===id)return;
       if(artistKeys(o.a).some(function(k){return mine.indexOf(k)>=0}))am++;
       if(s.g!=='Other'&&o.g===s.g)gm++});
-    var share=gm/d.ids.length,sc=0;
-    if(am>0)sc=100+Math.min(am,5)*10+share*10;
-    else if(share>=0.4&&gm>=2)sc=share*100;
+    return {am:am,gm:gm};
+  }
+  S.decks.forEach(function(d){
+    if(!d.mood||!d.ids.length)return;
+    var t=stat(d),v=3*t.am+t.gm/d.ids.length*2;
+    if(v>0){votes[d.mood]=(votes[d.mood]||0)+v;vt+=v}
+  });
+  var exp=null,conf=0;
+  Object.keys(votes).forEach(function(k){if(!exp||votes[k]>votes[exp])exp=k});
+  if(exp)conf=votes[exp]/vt;
+  S.decks.filter(deckOpen).forEach(function(d){
+    if(!d.ids.length||d.ids.indexOf(id)>=0)return;
+    var t=stat(d),share=t.gm/d.ids.length,sc=0,bonus=(exp&&d.mood===exp)?15*conf:0;
+    if(t.am>0)sc=100+Math.min(t.am,5)*10+share*10+bonus*0.4;
+    else if(share>=0.4&&t.gm>=2)sc=share*100+bonus;
+    else if(bonus>0&&share>=0.25&&t.gm>=2)sc=share*100+bonus;
     if(sc>0)out.push({id:d.id,sc:sc,n:d.ids.length});
   });
   out.sort(function(a,b){return b.sc-a.sc||b.n-a.n});
@@ -1500,11 +1533,12 @@ function recDecks(id){
 }
 function ringHtml(id){
   var items=[];
-  S.decks.filter(deckOpen).forEach(function(d){items.push({k:'deck',id:d.id,s:((d.name||'')+' '+d.ids.map(function(x){return SONGS[x]?SONGS[x].a:''}).join(' ')).toLowerCase(),label:d.name||'Untitled deck',on:d.ids.indexOf(id)>=0,n:d.ids.length,last:d.ids.slice(-2).reverse().map(function(x){return SONGS[x]?SONGS[x].t:''}).filter(Boolean)})});
+  S.decks.filter(deckOpen).forEach(function(d){items.push({k:'deck',id:d.id,r:moodRank(d),m:moodOf(d),s:((d.name||'')+' '+(moodOf(d)?moodOf(d).n:'')+' '+d.ids.map(function(x){return SONGS[x]?SONGS[x].a:''}).join(' ')).toLowerCase(),label:d.name||'Untitled deck',on:d.ids.indexOf(id)>=0,n:d.ids.length,last:d.ids.slice(-2).reverse().map(function(x){return SONGS[x]?SONGS[x].t:''}).filter(Boolean)})});
+  items=items.map(function(it,i){it.i=i;return it}).sort(function(p,q){return p.r-q.r||p.i-q.i});
   var recs=recDecks(id);
   function tile(it,k,cls){
-    return '<button class="rit '+it.k+(it.on?' on':'')+(cls||'')+'" data-s="'+esc(it.s)+'" data-act="ring-'+it.k+'"'+(it.k==='deck'?' data-id="'+it.id+'" aria-pressed="'+(it.on?'true':'false')+'"':'')
-      +' style="--k:'+k+'"><span class="rl">'+esc(it.label)+'</span>'+(it.k==='deck'?'<span class="rc">'+it.n+'/'+DECK_MAX+'</span>':'')+(it.k==='deck'&&it.last&&it.last.length?'<span class="rs">'+it.last.map(function(t){return '<i>'+esc(t)+'</i>'}).join('')+'</span>':'')+'</button>';
+    return '<button class="rit '+it.k+(it.on?' on':'')+(it.m?' mood':'')+(cls||'')+'" data-s="'+esc(it.s)+'" data-act="ring-'+it.k+'"'+(it.k==='deck'?' data-id="'+it.id+'" aria-pressed="'+(it.on?'true':'false')+'"':'')
+      +' style="--k:'+k+(it.m?';--mh:'+it.m.h:'')+'"><span class="rl">'+esc(it.label)+'</span>'+(it.k==='deck'?'<span class="rc">'+it.n+'/'+DECK_MAX+(it.m?' · '+it.m.n:'')+'</span>':'')+(it.k==='deck'&&it.last&&it.last.length?'<span class="rs">'+it.last.map(function(t){return '<i>'+esc(t)+'</i>'}).join('')+'</span>':'')+'</button>';
   }
   var html='';
   if(recs.length){
@@ -1587,9 +1621,9 @@ function deckOpen(d){return !d.ex&&!deckFull(d)}
 function openNamePanel(cid){
   closeNamePanel();
   var p=document.createElement('div');p.id='namepanel';
-  p.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:65;background:#1b1b22;color:#fff;padding:14px 16px calc(14px + env(safe-area-inset-bottom));box-shadow:0 -6px 24px rgba(0,0,0,.5);display:flex;gap:8px;align-items:center;font:inherit';
+  p.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:65;background:#1b1b22;color:#fff;padding:14px 16px calc(14px + env(safe-area-inset-bottom));box-shadow:0 -6px 24px rgba(0,0,0,.5);display:flex;flex-wrap:wrap;gap:8px;align-items:center;font:inherit';
   p.dataset.cid=cid;
-  p.innerHTML='<input id="newdeck-name" maxlength="40" placeholder="Name this deck" autocomplete="off" style="flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid #555;background:#0e0e12;color:#fff;font:inherit;font-size:16px">'
+  p.innerHTML='<div class="moodrow" style="flex:1 0 100%;margin:0" role="group" aria-label="Mood">'+moodPickerHtml('','newdeck-mood')+'</div><input id="newdeck-name" maxlength="40" placeholder="Name this deck" autocomplete="off" style="flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid #555;background:#0e0e12;color:#fff;font:inherit;font-size:16px">'
    +'<button data-act="newdeck-ok" style="padding:10px 14px;border-radius:10px;border:0;background:#e8b84a;color:#111;font:inherit;font-weight:600">Create</button>'
    +'<button data-act="newdeck-cancel" style="padding:10px 12px;border-radius:10px;border:1px solid #555;background:none;color:#fff;font:inherit">Cancel</button>';
   document.body.appendChild(p);
@@ -1599,10 +1633,10 @@ function closeNamePanel(){var p=document.getElementById('namepanel');if(p)p.remo
 function makeNamedDeck(){
   var p=document.getElementById('namepanel');if(!p)return;
   var cid=p.dataset.cid;if(!SONGS[cid]&&!S.owned[cid]){}
-  var nm=p.querySelector('input').value.trim();
+  var nm=p.querySelector('input').value.trim(),mk=p.dataset.mood||'';
   closeNamePanel();
   leaveOtherDecks(cid,null);
-  var nd=newDeck([cid]);if(nm){nd.name=nm;save()}
+  var nd=newDeck([cid]);if(nm)nd.name=nm;if(mk)nd.mood=mk;if(nm||mk)save();
   toast('Made "'+nd.name+'" with this song');
   if(advanceIfQueue())return;
   fillRing(cid,true);render();
@@ -1898,6 +1932,8 @@ document.addEventListener('click',function(e){
       if(cid!==null)openNamePanel(cid);
       break;
     case 'newdeck-ok':makeNamedDeck();break;
+    case 'newdeck-mood':{var np=document.getElementById('namepanel');if(np){np.dataset.mood=(np.dataset.mood===t.dataset.mood)?'':t.dataset.mood;np.querySelectorAll('.mpick').forEach(function(x){x.classList.toggle('on',x.dataset.mood===np.dataset.mood)})}break}
+    case 'set-mood':{d=curDeck();if(d){d.mood=(d.mood===t.dataset.mood)?undefined:t.dataset.mood;if(!d.mood)delete d.mood;save();render()}break}
     case 'newdeck-cancel':closeNamePanel();
       break;
     case 'ring-none':
