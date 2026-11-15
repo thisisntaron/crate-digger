@@ -1630,7 +1630,7 @@ function artistKeys(a){return String(a||'').toLowerCase().split(/\s*(?:,|&|\+|\b
 var REC_MAX=6;
 /* Moods, ordered low to high energy. Each playlist can carry one; tiles sort in this order and wear the colour. */
 var MOODS=[{k:'sad',n:'Sad',h:225},{k:'ponderous',n:'Ponderous',h:252},{k:'dreamy',n:'Dreamy',h:285},{k:'chill',n:'Chill',h:188},
-  {k:'angsty',n:'Angsty',h:320},{k:'dancy',n:'Dancy',h:50},{k:'energetic',n:'Energetic',h:24},{k:'angry',n:'Angry',h:2}];
+  {k:'angsty',n:'Angsty',h:320},{k:'dancy',n:'Dancy',h:50},{k:'upbeat',n:'Upbeat',h:135},{k:'energetic',n:'Energetic',h:24},{k:'angry',n:'Angry',h:2}];
 function moodOf(d){for(var i=0;i<MOODS.length;i++)if(MOODS[i].k===(d&&d.mood))return MOODS[i];return null}
 function moodRank(d){var m=moodOf(d);return m?MOODS.indexOf(m):99}
 function moodChip(d){var m=moodOf(d);return m?'<span class="mchip" style="--mh:'+m.h+'">'+m.n+'</span>':''}
