@@ -453,7 +453,7 @@ function load(){
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}if(typeof cloudDirty==='function')cloudDirty()}
 var S=load()||fresh();
 SONGS=S.songs;
-var ST={tab:'packs',deckId:null,q:'',sort:'new',gf:'all',open:null,radial:null,sheet:null,addq:'',confirmDel:false,confirmReset:false,auto:true};
+var ST={tab:'packs',deckId:null,roadId:null,confirmRoadDel:false,q:'',sort:'new',gf:'all',open:null,radial:null,sheet:null,addq:'',confirmDel:false,confirmReset:false,auto:true};
 var SYNC={state:'connecting',msg:'',at:0,total:0,busy:false};
 var rowsCache=null;
 /* Spotify songs: spotify.json holds them all. Songs flagged d have been looked up (genre, art, clip) and become packs; the rest wait. */
@@ -962,7 +962,7 @@ function loadBackupText(text){
   var cards=Object.keys(st.owned).length;
   var have=ownedIds().length>0||S.decks.length>0;
   if(have&&!window.confirm('Replace what is on this device ('+ownedIds().length+' cards, '+S.decks.length+' decks) with the backup ('+cards+' cards, '+st.decks.length+' decks)?'))return false;
-  sndStop();ST.open=null;ST.radial=null;ST.rq='';ST.deckId=null;ST.sheet=null;
+  sndStop();ST.open=null;ST.radial=null;ST.rq='';ST.deckId=null;ST.roadId=null;ST.sheet=null;
   S=st;SONGS=S.songs;artCache={};planCache={};
   var made=rowsCache?mergeRows(rowsCache).packs:0;
   save();
@@ -1068,7 +1068,7 @@ function applyRemote(j){
   if(!validState(st)){toast('The cloud save could not be read');return false}
   var u={};st.decks.forEach(function(k){k.ids=k.ids.filter(function(i){if(u[i])return false;u[i]=1;return true})});
   CLOUD.applying=true;
-  sndStop();ST.open=null;ST.radial=null;ST.rq='';ST.deckId=null;ST.sheet=null;
+  sndStop();ST.open=null;ST.radial=null;ST.rq='';ST.deckId=null;ST.roadId=null;ST.sheet=null;
   S=st;SONGS=S.songs;artCache={};planCache={};
   if(rowsCache)mergeRows(rowsCache);
   save();
@@ -1292,6 +1292,114 @@ function fuseSheetHtml(){
   return '<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet pick" role="dialog" aria-label="'+title+'">'
     +'<div class="sheet-head"><h3 class="h3">'+title+'</h3><button class="btn" data-act="close-sheet">Cancel</button></div>'+body+'</div>';
 }
+/* ---------- roadtrips: long playlists built from several decks ---------- */
+var MIN_PER_SONG=3.5,ROAD_ORDERS=[{k:'up',n:'Calm to intense'},{k:'down',n:'Intense to calm'},{k:'decks',n:'Deck by deck'},{k:'shuffle',n:'Shuffled'}],ROAD_HOURS=[2,3,4,5,6,8,10];
+function roads(){if(!S.roads)S.roads=[];return S.roads}
+function fmtLen(n){var m=Math.round(n*MIN_PER_SONG/5)*5,h=Math.floor(m/60);return (h?h+'h ':'')+(m%60?m%60+'m':'')||'0m'}
+function seededShuffle(a,seed){
+  var r=seed||1,out=a.slice();
+  function rnd(){r=(r*1664525+1013904223)%4294967296;return r/4294967296}
+  for(var i=out.length-1;i>0;i--){var j=Math.floor(rnd()*(i+1)),t=out[i];out[i]=out[j];out[j]=t}
+  return out;
+}
+function roadDecks(r){
+  var ds=r.decks.map(function(id){return S.decks.find(function(d){return d.id===id})}).filter(Boolean);
+  if(r.order==='up')ds=ds.map(function(d,i){return {d:d,i:i}}).sort(function(a,b){return moodRank(a.d)-moodRank(b.d)||a.i-b.i}).map(function(x){return x.d});
+  else if(r.order==='down')ds=ds.map(function(d,i){return {d:d,i:i}}).sort(function(a,b){var ra=moodRank(a.d),rb=moodRank(b.d);if(ra===99)ra=-1;if(rb===99)rb=-1;return (rb-ra)||a.i-b.i}).map(function(x){return x.d});
+  return ds;
+}
+function roadIds(r){
+  var seen={},ids=[];
+  roadDecks(r).forEach(function(d){d.ids.forEach(function(id){if(SONGS[id]&&!seen[id]){seen[id]=1;ids.push(id)}})});
+  return r.order==='shuffle'?seededShuffle(ids,r.seed):ids;
+}
+function roadPool(cfg){
+  var any=Object.keys(cfg.moods||{}).length;
+  return S.decks.filter(function(d){
+    if(!d.ids.length)return false;
+    if(d.ex&&!cfg.ex)return false;
+    if(any&&!(d.mood?cfg.moods[d.mood]:cfg.moods.none))return false;
+    return true;
+  });
+}
+/* Pick decks whose total song count lands closest to the target length. Tries many random orders and keeps the best. */
+function roadPick(cfg){
+  var pool=roadPool(cfg),target=Math.round(cfg.hours*60/MIN_PER_SONG),total=pool.reduce(function(n,d){return n+d.ids.length},0);
+  if(total<=target)return pool.map(function(d){return d.id});
+  var best=null,bd=1e9;
+  for(var t=0;t<300;t++){
+    var sh=seededShuffle(pool,Math.floor(Math.random()*4e9)+1),sum=0,pick=[];
+    sh.forEach(function(d){if(sum+d.ids.length<=target+8){pick.push(d.id);sum+=d.ids.length}});
+    var diff=Math.abs(sum-target);
+    if(diff<bd||(diff===bd&&best&&pick.length>best.length)){bd=diff;best=pick}
+    if(bd===0)break;
+  }
+  return best||[];
+}
+function roadChip(on,act,attrs,label,h){
+  return '<button type="button" class="mpick'+(on?' on':'')+'" data-act="'+act+'" '+attrs+' style="--mh:'+(h===undefined?190:h)+'">'+label+'</button>';
+}
+function roadSheetHtml(){
+  var sh=ST.sheet,body='',title='Plan a roadtrip';
+  var cfg={hours:sh.hours,moods:sh.moods,ex:sh.ex};
+  if(sh.step==='setup'){
+    var pool=roadPool(cfg),ps=pool.reduce(function(n,d){return n+d.ids.length},0);
+    body='<p class="sub" style="margin:0 0 6px">How long is the drive?</p><div class="moodrow" style="margin:0 0 12px">'
+      +ROAD_HOURS.map(function(h){return roadChip(sh.hours===h,'road-hours','data-h="'+h+'"',h+' h',48)}).join('')+'</div>'
+      +'<p class="sub" style="margin:0 0 6px">Only these moods (none picked means any)</p><div class="moodrow" style="margin:0 0 12px">'
+      +MOODS.map(function(m){return roadChip(!!sh.moods[m.k],'road-mood','data-m="'+m.k+'"',m.n,m.h)}).join('')+roadChip(!!sh.moods.none,'road-mood','data-m="none"','No mood',200)+'</div>'
+      +'<div class="moodrow" style="margin:0 0 12px">'+roadChip(sh.ex,'road-ex','','Include exported decks',48)+'</div>'
+      +'<p class="sub" style="margin:0 0 6px">Order</p><div class="moodrow" style="margin:0 0 12px">'
+      +ROAD_ORDERS.map(function(o){return roadChip(sh.order===o.k,'road-order','data-o="'+o.k+'"',o.n,268)}).join('')+'</div>'
+      +'<p class="syncmsg" style="margin:0 0 10px">'+pool.length+' decks match, '+ps+' songs (about '+fmtLen(ps)+'). Target is about '+sh.hours+' h, around '+Math.round(sh.hours*60/MIN_PER_SONG)+' songs.</p>'
+      +'<button class="btn primary" style="width:100%"'+(pool.length?'':' disabled')+' data-act="road-build">Build it</button>';
+  }else{
+    title='Your roadtrip';
+    var tmp={decks:sh.pick,order:sh.order,seed:sh.seed},ds=roadDecks(tmp),n=roadIds(tmp).length;
+    body='<p class="sub" style="margin:0 0 10px"><b>'+n+' songs, about '+fmtLen(n)+'</b> from '+ds.length+(ds.length===1?' deck':' decks')+'. Target was '+sh.hours+' h.</p>'
+      +(ds.length?ds.map(function(d){return '<div class="pickrow" style="cursor:default"><b>'+esc(d.name||'Untitled deck')+moodChip(d)+'</b><span>'+d.ids.length+' songs'+(d.ex?' · exported':'')+'</span>'
+        +'<button class="ib" data-act="road-drop" data-id="'+d.id+'" aria-label="Leave out '+esc(d.name)+'">×</button></div>'}).join(''):'<p class="empty">Nothing picked.</p>')
+      +(n<Math.round(sh.hours*60/MIN_PER_SONG)*0.9?'<p class="syncmsg" style="margin:10px 0 0">Your matching decks only add up to about '+fmtLen(n)+'. Pick a shorter trip, loosen the mood filter, or sort more songs into decks.</p>':'')
+      +'<p class="sub" style="margin:12px 0 4px">Name</p>'
+      +'<input id="road-name" class="deckname" type="text" maxlength="40" value="'+esc(sh.name||'Roadtrip')+'" aria-label="Roadtrip name" autocomplete="off">'
+      +'<div class="actions" style="margin-top:12px"><button class="btn primary" data-act="road-save"'+(ds.length?'':' disabled')+'>Save roadtrip</button><button class="btn" data-act="road-reroll">Pick different decks</button><button class="btn" data-act="road-setup">Change settings</button></div>';
+  }
+  return '<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet pick" role="dialog" aria-label="Roadtrip">'
+    +'<div class="sheet-head"><h3 class="h3">'+title+'</h3><button class="btn" data-act="close-sheet">Close</button></div>'+body+'</div>';
+}
+function roadSection(){
+  var rs=roads(),canPlan=S.decks.some(function(d){return d.ids.length});
+  return '<h3 class="h3 sect">Roadtrips</h3>'
+    +(rs.length?'<ul class="decklist">'+rs.map(function(r){var n=roadIds(r).length;
+      return '<li><button class="deckrow" data-act="open-road" data-id="'+r.id+'"><span class="dn">'+esc(r.name)+'</span><span class="chev" aria-hidden="true">›</span><span class="dm">'+n+' songs · about '+fmtLen(n)+' · '+r.decks.length+' decks</span></button></li>'}).join('')+'</ul>':'<p class="sub">Long playlists for long drives. Say how many hours and the app picks decks to fit.</p>')
+    +'<button class="btn" style="width:100%;margin:12px 0 0" data-act="road-open"'+(canPlan?'':' disabled')+'>Plan a roadtrip</button>';
+}
+function curRoad(){return roads().find(function(r){return r.id===ST.roadId})}
+function roadParts(r){
+  var ids=roadIds(r),parts=[],cur=[],miss=[];
+  ids.forEach(function(id){var v=ytId(id);if(v){cur.push(v);if(cur.length===50){parts.push(cur);cur=[]}}else miss.push(SONGS[id])});
+  if(cur.length)parts.push(cur);
+  return {parts:parts,miss:miss};
+}
+function viewRoad(){
+  var r=curRoad();
+  if(!r){ST.roadId=null;return viewDecks()}
+  var ids=roadIds(r),ds=roadDecks(r),yp=roadParts(r);
+  var songs=ids.map(function(id,i){var o=SONGS[id];return '<li class="trk" data-id="'+id+'" style="--gh:'+GEN[o.g].h+'"><span class="no">'+(i+1)+'</span><button class="thumbbtn" data-act="row-play" data-id="'+id+'" aria-label="Play preview of '+esc(o.t)+'">'+thumb(id)+'</button><span class="tt"><b>'+esc(o.t)+'</b><span>'+esc(o.a)+' · '+esc(o.g)+'</span></span></li>'}).join('');
+  return '<button class="back" data-act="back-decks">‹ All decks</button>'
+    +'<input id="road-rename" class="deckname" type="text" maxlength="40" value="'+esc(r.name)+'" aria-label="Roadtrip name" autocomplete="off">'
+    +'<p class="sub mono" style="margin:8px 0 10px">'+ids.length+' songs · about '+fmtLen(ids.length)+' · '+ds.length+' decks</p>'
+    +'<div class="moodrow" role="group" aria-label="Order" style="margin:0 0 10px">'+ROAD_ORDERS.map(function(o){return roadChip(r.order===o.k,'road-set-order','data-o="'+o.k+'"',o.n,268)}).join('')+'</div>'
+    +'<p class="mono" style="margin:0 0 10px">'+ds.map(function(d){return esc(d.name||'Untitled')}).join(' → ')+'</p>'
+    +'<div class="actions"><button class="btn primary" data-act="road-csv">Download CSV</button>'
+    +(r.order==='shuffle'?'<button class="btn" data-act="road-reshuffle">Reshuffle</button>':'')
+    +'<button class="btn" data-act="road-rebuild">Rebuild</button>'
+    +'<button class="btn danger" data-act="road-delete">'+(ST.confirmRoadDel?'Tap again to delete':'Delete roadtrip')+'</button></div>'
+    +(yp.parts.length?'<div class="ytx" style="margin-top:14px"><p class="syncmsg" style="margin:0 0 8px"><b>Exact songs on YouTube:</b> YouTube takes 50 videos per playlist, so this opens '+yp.parts.length+(yp.parts.length===1?' playlist':' playlists')+'. Save each one, then merge them in YouTube Music if you want one list.'
+      +(yp.miss.length?' Not matched ('+yp.miss.length+'), add by hand: '+yp.miss.slice(0,12).map(function(o){return esc(o.t+' / '+o.a)}).join('; ')+(yp.miss.length>12?' and '+(yp.miss.length-12)+' more':'')+'.':'')+'</p>'
+      +'<div class="actions">'+yp.parts.map(function(pt,i){return '<button class="btn" data-act="road-yt" data-i="'+i+'">Part '+(i+1)+' of '+yp.parts.length+'</button>'}).join('')+'</div></div>':'')
+    +'<details style="margin-top:14px"><summary class="mono" style="cursor:pointer">Show all '+ids.length+' songs</summary><ul class="decklist">'+songs+'</ul></details>';
+}
 /* ---------- quick mood tagging ---------- */
 function untaggedDecks(){return S.decks.filter(function(d){return !d.mood&&!d.ex&&d.ids.length})}
 function tagSheetHtml(){
@@ -1315,6 +1423,7 @@ function tagSheetHtml(){
     +'<div class="sheet-head"><h3 class="h3">'+title+'</h3><button class="btn" data-act="close-sheet">Close</button></div>'+body+'</div>';
 }
 function viewDecks(){
+  if(ST.roadId)return viewRoad();
   if(ST.deckId)return viewDeck();
   var act=S.decks.filter(function(d){return !d.ex}),done=S.decks.filter(function(d){return d.ex});
   return '<div class="row-head"><h2 class="h2">Decks</h2><button class="btn primary" data-act="new-deck">New deck</button></div>'
@@ -1322,11 +1431,12 @@ function viewDecks(){
     +(function(){var n=untaggedDecks().length;return n?'<button class="btn" style="width:100%;margin:12px 0 0" data-act="tag-open">Tag moods ('+n+' without one)</button>':''})()
     +(function(){var n=fusePairs().length;return n?'<button class="btn" style="width:100%;margin:12px 0 0" data-act="fuse-open">Fuse similar decks ('+n+(n===1?' pair':' pairs')+')</button>':''})()
     +(act.length?'<ul class="decklist">'+act.map(deckRowHtml).join('')+'</ul>':'<p class="empty" style="margin-top:12px">'+(done.length?'No active decks.':'No decks yet. Make one, then add songs from your cards.')+'</p>')
-    +(done.length?'<h3 class="h3 sect">Exported</h3><ul class="decklist">'+done.map(deckRowHtml).join('')+'</ul>':'');
+    +(done.length?'<h3 class="h3 sect">Exported</h3><ul class="decklist">'+done.map(deckRowHtml).join('')+'</ul>':'')
+    +roadSection();
 }
 function viewDeck(){
   var d=curDeck();
-  if(!d){ST.deckId=null;return viewDecks()}
+  if(!d){ST.deckId=null;ST.roadId=null;return viewDecks()}
   var mix=gcounts(d.ids).map(function(x){return x.n+' '+x.g.toLowerCase()}).join(', ');
   var rows=d.ids.map(function(id,i){
     var s=SONGS[id],last=i===d.ids.length-1;
@@ -1425,7 +1535,9 @@ function exportSheetHtml(){
 }
 function exportCsv(){
   var d=curDeck();if(!d)return;
-  var text=deckCsv(d),name=exportName(d);
+  shareCsv(deckCsv(d),exportName(d));
+}
+function shareCsv(text,name){
   try{
     var file=new File([text],name,{type:'text/csv'});
     if(IS_IOS&&navigator.canShare&&navigator.canShare({files:[file]})){
@@ -1501,6 +1613,7 @@ function renderSheet(anim){
   if(ST.sheet.type==='peek'){el.innerHTML=peekSheetHtml();if(anim){var shp=$('.sheet',el);if(shp)shp.classList.add('enter')}return}
   if(ST.sheet.type==='move'){el.innerHTML=pickSheetHtml();if(anim){var shm=$('.sheet',el);if(shm)shm.classList.add('enter')}return}
   if(ST.sheet.type==='junk'){el.innerHTML=junkSheetHtml();if(anim){var sh1=$('.sheet',el);if(sh1)sh1.classList.add('enter')}return}
+  if(ST.sheet.type==='road'){el.innerHTML=roadSheetHtml();if(anim){var shr=$('.sheet',el);if(shr)shr.classList.add('enter')}return}
   if(/^tag$/.test(ST.sheet.type)){el.innerHTML=tagSheetHtml();if(anim){var sht=$('.sheet',el);if(sht)sht.classList.add('enter')}return}
   if(/^fuse/.test(ST.sheet.type)){el.innerHTML=fuseSheetHtml();if(anim){var shf=$('.sheet',el);if(shf)shf.classList.add('enter')}return}
   if(ST.sheet.type==='export'){el.innerHTML=exportSheetHtml();if(anim){var sh0=$('.sheet',el);if(sh0)sh0.classList.add('enter')}return}
@@ -1898,7 +2011,7 @@ document.addEventListener('click',function(e){
   var act=t.dataset.act,sid=t.dataset.id,id=+sid,i=+t.dataset.i,d,cid;
   switch(act){
     case 'tab':
-      if(t.dataset.tab===ST.tab&&ST.tab==='decks')ST.deckId=null;
+      if(t.dataset.tab===ST.tab&&ST.tab==='decks'){ST.deckId=null;ST.roadId=null}
       if(t.dataset.tab==='packs'&&ST.tab!=='packs')ST.pick=null;
       if(!ST.open&&!ST.radial)sndStop();
       ST.tab=t.dataset.tab;ST.confirmDel=false;ST.confirmReset=false;render();window.scrollTo(0,0);break;
@@ -1913,7 +2026,7 @@ document.addEventListener('click',function(e){
     case 'load-backup':loadBackupPick();break;
     case 'reset':
       if(!ST.confirmReset){ST.confirmReset=true;render();break}
-      S=fresh();SONGS=S.songs;artCache={};planCache={};ST.confirmReset=false;ST.deckId=null;
+      S=fresh();SONGS=S.songs;artCache={};planCache={};ST.confirmReset=false;ST.deckId=null;ST.roadId=null;
       save();if(rowsCache){var mm=mergeRows(rowsCache);toast('Started over. '+mm.packs+' packs ready.')}else{toast('Started over')}
       spotTick();
       render();break;
@@ -1994,12 +2107,32 @@ document.addEventListener('click',function(e){
     case 'fuse-confirm':
       var fn=($('#fuse-name').value||'').trim()||'Fused deck',fa=fuseDecks(+t.dataset.a,+t.dataset.b,fn);
       ST.sheet=null;renderSheet();
-      if(fa){ST.deckId=null;ST.tab='decks';render();toast('Fused into '+fa.name+' ('+fa.ids.length+' songs)'+(fa.ids.length>DECK_MAX?'. Use Split to make it exportable.':''))}
+      if(fa){ST.deckId=null;ST.roadId=null;ST.tab='decks';render();toast('Fused into '+fa.name+' ('+fa.ids.length+' songs)'+(fa.ids.length>DECK_MAX?'. Use Split to make it exportable.':''))}
       break;
     case 'open-deck':ST.deckId=id;ST.confirmDel=false;render();window.scrollTo(0,0);break;
-    case 'back-decks':sndStop();ST.deckId=null;ST.confirmDel=false;render();break;
+    case 'back-decks':sndStop();ST.deckId=null;ST.roadId=null;ST.confirmDel=false;ST.confirmRoadDel=false;render();break;
     case 'add-songs':ST.sheet={type:'add'};ST.addq='';renderSheet(true);break;
     case 'close-sheet':if(ST.sheet&&(ST.sheet.type==='peek'||ST.sheet.type==='move'||ST.sheet.type==='tag'))sndStop();var wasTag=ST.sheet&&ST.sheet.type==='tag';ST.sheet=null;renderSheet();if(wasTag)render();break;
+    case 'road-open':ST.sheet={type:'road',step:'setup',hours:4,moods:{},ex:true,order:'up'};renderSheet(true);break;
+    case 'road-hours':ST.sheet.hours=+t.dataset.h;renderSheet();break;
+    case 'road-mood':{var rm=ST.sheet.moods;if(rm[t.dataset.m])delete rm[t.dataset.m];else rm[t.dataset.m]=1;renderSheet();break}
+    case 'road-ex':ST.sheet.ex=!ST.sheet.ex;renderSheet();break;
+    case 'road-order':ST.sheet.order=t.dataset.o;renderSheet();break;
+    case 'road-build':case 'road-reroll':ST.sheet.pick=roadPick(ST.sheet);ST.sheet.seed=Math.floor(Math.random()*4e9)+1;ST.sheet.step='result';renderSheet();break;
+    case 'road-setup':ST.sheet.step='setup';renderSheet();break;
+    case 'road-drop':ST.sheet.pick=ST.sheet.pick.filter(function(x){return x!==+t.dataset.id});renderSheet();break;
+    case 'road-save':{
+      var rsh=ST.sheet,nmEl=$('#road-name'),nr={id:S.nid++,name:((nmEl&&nmEl.value)||'Roadtrip').trim().slice(0,40)||'Roadtrip',decks:rsh.pick.slice(),order:rsh.order,seed:rsh.seed,cfg:{hours:rsh.hours,moods:rsh.moods,ex:rsh.ex}};
+      roads().push(nr);save();ST.sheet=null;renderSheet();ST.roadId=nr.id;render();toast('Saved "'+nr.name+'"');break}
+    case 'open-road':ST.roadId=+t.dataset.id;ST.confirmRoadDel=false;render();break;
+    case 'road-set-order':{var r1=curRoad();if(r1){r1.order=t.dataset.o;save();render()}break}
+    case 'road-reshuffle':{var r2=curRoad();if(r2){r2.seed=Math.floor(Math.random()*4e9)+1;save();render()}break}
+    case 'road-rebuild':{var r3=curRoad();if(r3&&r3.cfg){r3.decks=roadPick(r3.cfg);r3.seed=Math.floor(Math.random()*4e9)+1;save();render();toast('Picked different decks')}break}
+    case 'road-delete':
+      if(!ST.confirmRoadDel){ST.confirmRoadDel=true;render();break}
+      S.roads=roads().filter(function(x){return x.id!==ST.roadId});ST.roadId=null;ST.confirmRoadDel=false;save();render();toast('Roadtrip deleted');break;
+    case 'road-csv':{var r4=curRoad();if(r4)shareCsv(deckCsv({ids:roadIds(r4)}),(String(r4.name).replace(/[^A-Za-z0-9 _-]+/g,'').trim()||'roadtrip')+'.csv')}break;
+    case 'road-yt':{var r5=curRoad();if(r5){var pt=roadParts(r5).parts[+t.dataset.i];if(pt)window.open('https://www.youtube.com/watch_videos?video_ids='+pt.join(','),'_blank','noopener')}break}
     case 'tag-open':ST.sheet={type:'tag',q:untaggedDecks().map(function(x){return x.id}),i:0,n:0};renderSheet(true);break;
     case 'tag-mood':{sndStop();var tq=ST.sheet,td=S.decks.find(function(x){return x.id===tq.q[tq.i]});if(td){td.mood=t.dataset.mood;save();tq.n++}tq.i++;renderSheet();break}
     case 'tag-skip':sndStop();ST.sheet.i++;renderSheet();break;
@@ -2037,12 +2170,12 @@ document.addEventListener('click',function(e){
     case 'yt-playlist':{d=curDeck();if(d&&ytSplit(d).ok.length)window.open(ytUrl(d),'_blank','noopener');break}
     case 'export-csv':exportCsv();break;
     case 'copy-sheet':{d=curDeck();if(d){var tx=deckText(d);try{navigator.clipboard.writeText(tx).then(function(){toast('Playlist text copied')},function(){toast('Could not copy')})}catch(e2){toast('Could not copy')}}break}
-    case 'mark-exported':d=curDeck();if(d){d.ex=Date.now();save();ST.sheet=null;renderSheet();ST.deckId=null;render();toast(d.name+' moved to Exported')}break;
+    case 'mark-exported':d=curDeck();if(d){d.ex=Date.now();save();ST.sheet=null;renderSheet();ST.deckId=null;ST.roadId=null;render();toast(d.name+' moved to Exported')}break;
     case 'reopen':d=curDeck();if(d){delete d.ex;save();render();toast('Deck reopened')}break;
     case 'del':
       if(!ST.confirmDel){ST.confirmDel=true;render();break}
       S.decks=S.decks.filter(function(x){return x.id!==ST.deckId});
-      ST.deckId=null;ST.confirmDel=false;save();render();toast('Deck deleted');break;
+      ST.deckId=null;ST.roadId=null;ST.confirmDel=false;save();render();toast('Deck deleted');break;
     case 'up':
     case 'down':
       d=curDeck();
@@ -2057,6 +2190,7 @@ document.addEventListener('input',function(e){
   if(id==='q'){ST.q=e.target.value;renderGrid()}
   else if(id==='add-q'){ST.addq=e.target.value;var al=$('#addlist');if(al)al.innerHTML=addRows()}
   else if(id==='rsearch'){ST.rq=e.target.value;filterRing()}
+  else if(id==='road-rename'){var rr=curRoad();if(rr){rr.name=e.target.value.slice(0,40);save()}}
   else if(id==='deck-name'){var d=curDeck();if(d){d.name=e.target.value.slice(0,40);save()}}
 });
 document.addEventListener('change',function(e){
