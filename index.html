@@ -228,7 +228,9 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
   .ov:has(#radial) .sortrow{grid-column:1;grid-row:4;width:100%;margin:0;padding:0;border:0}
   .ov:has(#radial) .sortrow .btn{min-height:38px}
   /* playlist tiles */
-  .ov:has(#radial) .ring{grid-column:2;grid-row:2/5;position:static;inset:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:calc((100% - 18px) / 4);gap:6px;align-content:start;
+  .ov:has(#radial) .rwrap{grid-column:2;grid-row:2/5;display:flex;flex-direction:column;gap:6px;min-height:0}
+  .ov:has(#radial) .rsearch{flex:none;width:100%;min-height:36px;padding:5px 10px;border-radius:10px;font-size:16px}
+  .ov:has(#radial) .ring{flex:1;position:static;inset:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:calc((100% - 18px) / 4);gap:6px;align-content:start;
     overflow-y:auto;pointer-events:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;min-height:0}
   .ov:has(#radial) .rit{position:static;transform:none;width:auto;aspect-ratio:auto;border-radius:10px;font:600 12px/1.15 var(--font-body);padding:4px 6px;
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;animation:popg .3s ease-out backwards;animation-delay:calc(var(--k) * 25ms);min-width:0}
@@ -258,6 +260,7 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
   .ov:has(#radial) .cpv #pvnote{font-size:12.5px}
   .ov:has(#radial) .dock .btn.primary,.ov:has(#radial) .dock .btn[data-act=next-song]{min-height:58px;font-size:18px}
   .ov:has(#radial) .sortrow .btn{min-height:50px;font-size:15px}
+  .ov:has(#radial) .rsearch{min-height:44px}
   .ov:has(#radial) .ring{grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:calc((100% - 40px) / 5);gap:10px}
   .ov:has(#radial) .rit{font-size:14.5px;padding:6px 8px;border-radius:14px}
   .ov:has(#radial) .rit .rc{font-size:12px}
@@ -279,7 +282,8 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
   .ov:has(#radial) .card{grid-column:1;grid-row:2;height:340px;max-height:none}
   .ov:has(#radial) .dock .btn.primary,.ov:has(#radial) .dock .btn[data-act=next-song]{grid-column:1;grid-row:3}
   .ov:has(#radial) .sortrow{grid-column:1;grid-row:4}
-  .ov:has(#radial) .ring{grid-column:1;grid-row:5;grid-auto-rows:calc((100% - 30px) / 4);margin-top:6px}
+  .ov:has(#radial) .rwrap{grid-column:1;grid-row:5;margin-top:6px}
+  .ov:has(#radial) .ring{grid-auto-rows:calc((100% - 30px) / 4)}
 }
 
 /* phone held upright: card on top, a scrolling two-column grid of playlist tiles below */
@@ -288,7 +292,8 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
   .ov:has(#radial) .card{grid-column:1;grid-row:2;height:212px;max-height:none}
   .ov:has(#radial) .dock .btn.primary,.ov:has(#radial) .dock .btn[data-act=next-song]{grid-column:1;grid-row:3}
   .ov:has(#radial) .sortrow{grid-column:1;grid-row:4}
-  .ov:has(#radial) .ring{grid-column:1;grid-row:5;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:92px;gap:8px;margin-top:2px}
+  .ov:has(#radial) .rwrap{grid-column:1;grid-row:5;margin-top:2px}
+  .ov:has(#radial) .ring{grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:92px;gap:8px}
   .ov:has(#radial) .rit{font-size:13px}
   .ov:has(#radial) .rit .rc{font-size:11px}
   .ov:has(#radial) .rit .rs{display:flex;flex-direction:column;gap:1px;width:100%;margin-top:2px;font:400 10.5px/1.2 var(--font-body);opacity:.62;text-align:center}
@@ -319,6 +324,7 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
 
 /* playlist tiles */
 .cin{width:100%;animation:rise .35s ease-out}
+.rit[hidden],.recwrap[hidden]{display:none!important}
 .rit{border:1.5px solid var(--line);background:var(--surface-2);color:var(--fg);text-align:center}
 .ring.still .rit{animation:none}
 .rl{display:-webkit-box;-webkit-line-clamp:3;line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
@@ -948,7 +954,7 @@ function loadBackupText(text){
   var cards=Object.keys(st.owned).length;
   var have=ownedIds().length>0||S.decks.length>0;
   if(have&&!window.confirm('Replace what is on this device ('+ownedIds().length+' cards, '+S.decks.length+' decks) with the backup ('+cards+' cards, '+st.decks.length+' decks)?'))return false;
-  sndStop();ST.open=null;ST.radial=null;ST.deckId=null;ST.sheet=null;
+  sndStop();ST.open=null;ST.radial=null;ST.rq='';ST.deckId=null;ST.sheet=null;
   S=st;SONGS=S.songs;artCache={};planCache={};
   var made=rowsCache?mergeRows(rowsCache).packs:0;
   save();
@@ -1054,7 +1060,7 @@ function applyRemote(j){
   if(!validState(st)){toast('The cloud save could not be read');return false}
   var u={};st.decks.forEach(function(k){k.ids=k.ids.filter(function(i){if(u[i])return false;u[i]=1;return true})});
   CLOUD.applying=true;
-  sndStop();ST.open=null;ST.radial=null;ST.deckId=null;ST.sheet=null;
+  sndStop();ST.open=null;ST.radial=null;ST.rq='';ST.deckId=null;ST.sheet=null;
   S=st;SONGS=S.songs;artCache={};planCache={};
   if(rowsCache)mergeRows(rowsCache);
   save();
@@ -1494,10 +1500,10 @@ function recDecks(id){
 }
 function ringHtml(id){
   var items=[];
-  S.decks.filter(deckOpen).forEach(function(d){items.push({k:'deck',id:d.id,label:d.name||'Untitled deck',on:d.ids.indexOf(id)>=0,n:d.ids.length,last:d.ids.slice(-2).reverse().map(function(x){return SONGS[x]?SONGS[x].t:''}).filter(Boolean)})});
+  S.decks.filter(deckOpen).forEach(function(d){items.push({k:'deck',id:d.id,s:((d.name||'')+' '+d.ids.map(function(x){return SONGS[x]?SONGS[x].a:''}).join(' ')).toLowerCase(),label:d.name||'Untitled deck',on:d.ids.indexOf(id)>=0,n:d.ids.length,last:d.ids.slice(-2).reverse().map(function(x){return SONGS[x]?SONGS[x].t:''}).filter(Boolean)})});
   var recs=recDecks(id);
   function tile(it,k,cls){
-    return '<button class="rit '+it.k+(it.on?' on':'')+(cls||'')+'" data-act="ring-'+it.k+'"'+(it.k==='deck'?' data-id="'+it.id+'" aria-pressed="'+(it.on?'true':'false')+'"':'')
+    return '<button class="rit '+it.k+(it.on?' on':'')+(cls||'')+'" data-s="'+esc(it.s)+'" data-act="ring-'+it.k+'"'+(it.k==='deck'?' data-id="'+it.id+'" aria-pressed="'+(it.on?'true':'false')+'"':'')
       +' style="--k:'+k+'"><span class="rl">'+esc(it.label)+'</span>'+(it.k==='deck'?'<span class="rc">'+it.n+'/'+DECK_MAX+'</span>':'')+(it.k==='deck'&&it.last&&it.last.length?'<span class="rs">'+it.last.map(function(t){return '<i>'+esc(t)+'</i>'}).join('')+'</span>':'')+'</button>';
   }
   var html='';
@@ -1508,10 +1514,20 @@ function ringHtml(id){
   html+=items.map(function(it,k){return tile(it,k,'')}).join('');
   return html;
 }
+function filterRing(){
+  var ring=$('#ring');if(!ring)return;
+  var q=(ST.rq||'').trim().toLowerCase(),hit=0;
+  ring.querySelectorAll('.rit').forEach(function(t){var m=!q||(t.dataset.s||'').indexOf(q)>=0;t.hidden=!m;if(m&&!t.closest('.recwrap'))hit++});
+  var rw=ring.querySelector('.recwrap');if(rw)rw.hidden=!!q;
+  var nm=ring.querySelector('.rnone');
+  if(q&&!hit){if(!nm){nm=document.createElement('p');nm.className='rnone empty';nm.textContent='No playlist or artist matches.';ring.appendChild(nm)}}
+  else if(nm)nm.remove();
+}
 function fillRing(id,still){
   var ring=$('#ring');if(!ring)return;
   ring.classList.toggle('still',!!still);
   ring.innerHTML=ringHtml(id);
+  filterRing();
 }
 function autoChip(){return '<button class="chip'+(ST.auto?' on':'')+'" id="autochip" data-act="auto-toggle">Auto preview '+(ST.auto?'on':'off')+'</button>'}
 function pvHtml(id){
@@ -1647,7 +1663,7 @@ function renderOverlay0(){
     var id=ST.radial.id;
     var rq=ST.radial.q,pos=rq?rq.indexOf(id)+1:0;
     el.innerHTML='<div class="ov"><div class="ov-top"><button class="btn ghost" data-act="close-radial">Close</button>'+(rq&&pos?'<span class="mono">Card '+pos+' of '+rq.length+'</span>':'')+autoChip()+'</div>'
-      +'<div class="stage"><div class="radial" id="radial"><div class="ring" id="ring"></div><div class="cwrap"><div class="cin">'+card(id,0,'<div class="pv" id="pv">'+pvHtml(id)+'</div>')+'</div></div></div></div>'
+      +'<div class="stage"><div class="radial" id="radial"><div class="rwrap"><input id="rsearch" class="rsearch" type="search" placeholder="Search playlists or artists" value="'+esc(ST.rq||'')+'" autocomplete="off" aria-label="Search playlists"><div class="ring" id="ring"></div></div><div class="cwrap"><div class="cin">'+card(id,0,'<div class="pv" id="pv">'+pvHtml(id)+'</div>')+'</div></div></div></div>'
       +'<div class="dock">'
       +(ST.radial.q?(nextInQueue()===null?'<button class="btn" data-act="next-song" disabled>Last card reached</button>':'<button class="btn primary" data-act="next-song">Next song</button>'):'')+sortRowHtml()+'</div></div>';
     fillRing(id,false);
@@ -1663,7 +1679,7 @@ function renderOverlay0(){
     var c=o.cards[o.i],last=o.i===o.cards.length-1;
     var dots=o.cards.map(function(_,k){return '<i class="'+(k<=o.i?'on':'')+'"></i>'}).join('');
     el.innerHTML='<div class="ov"><div class="ov-top"><span class="mono">Card '+(o.i+1)+' of '+o.cards.length+'</span><span class="tr">'+autoChip()+'<button class="btn ghost" data-act="skip">Skip rest</button></span></div>'
-      +'<div class="stage"><div class="radial" id="radial"><div class="ring" id="ring"></div>'
+      +'<div class="stage"><div class="radial" id="radial"><div class="rwrap"><input id="rsearch" class="rsearch" type="search" placeholder="Search playlists or artists" value="'+esc(ST.rq||'')+'" autocomplete="off" aria-label="Search playlists"><div class="ring" id="ring"></div></div>'
       +'<div class="cwrap"><div class="cin">'+card(c.id,0,'<div class="pv" id="pv">'+pvHtml(c.id)+'</div>')+'</div></div></div></div>'
       +'<div class="dock">'
       +'<button class="btn primary" id="nextbtn" data-act="next">'+(last?'Finish':'Next card')+'</button>'+sortRowHtml()+'</div>'
@@ -1858,7 +1874,7 @@ document.addEventListener('click',function(e){
       ST.radial.u=ST.gf==='unsorted';
       renderOverlay();if(ST.auto)pvStart(sid);break;
     case 'next-song':gotoNext(false);break;
-    case 'close-radial':sndStop();ST.radial=null;renderOverlay();render();break;
+    case 'close-radial':sndStop();ST.rq='';ST.radial=null;renderOverlay();render();break;
     case 'auto-toggle':toggleAuto();break;
     case 'listen':sndStop();break;
     case 'toggle-play':
@@ -1975,13 +1991,15 @@ document.addEventListener('input',function(e){
   var id=e.target.id;
   if(id==='q'){ST.q=e.target.value;renderGrid()}
   else if(id==='add-q'){ST.addq=e.target.value;var al=$('#addlist');if(al)al.innerHTML=addRows()}
+  else if(id==='rsearch'){ST.rq=e.target.value;filterRing()}
   else if(id==='deck-name'){var d=curDeck();if(d){d.name=e.target.value.slice(0,40);save()}}
 });
 document.addEventListener('change',function(e){
   if(e.target.id==='sort'){ST.sort=e.target.value;renderGrid()}
 });
 document.addEventListener('keydown',function(e){
-  if(e.key==='Enter'&&e.target.id==='deck-name'){e.target.blur()}
+  if(e.key==='Enter'&&(e.target.id==='deck-name'||e.target.id==='rsearch')){e.target.blur()}
+  if(e.key==='Escape'&&e.target.id==='rsearch'&&e.target.value){e.target.value='';ST.rq='';filterRing();return}
   if(e.key==='Enter'&&e.target.id==='newdeck-name'){makeNamedDeck();return}
   if(e.key==='Escape'&&document.getElementById('namepanel')){closeNamePanel();return}
   if(e.key==='Escape'){
