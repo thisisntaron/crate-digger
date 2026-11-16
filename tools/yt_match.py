@@ -26,7 +26,7 @@ VENV = os.path.join(TOOLS, "venv")
 CACHE = os.path.join(HOME, ".crate-digger-ytmap.json")
 OUT = os.path.join(HOME, "Downloads", "crate-ytmap.json")
 SRC = "https://thisisntaron.github.io/crate-digger/spotify.json"
-PAUSE = 0.6
+PAUSE = 1.5
 
 
 def boot():
@@ -92,10 +92,12 @@ def main():
         except Exception as e:
             fails += 1
             print("  search error:", str(e)[:80], flush=True)
-            if fails >= 6:
-                print("Too many errors in a row, stopping. Run again later.")
+            if fails >= 4:
+                print("YouTube is refusing searches from this connection right now (rate limit). Progress is saved. Run again in a few hours, or switch to a different Wi-Fi or a phone hotspot and run again.")
                 break
-            time.sleep(8)
+            wait = 30 * fails
+            print("  waiting %ds before trying again" % wait, flush=True)
+            time.sleep(wait)
             continue
         fails = 0
         best = None
