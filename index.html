@@ -184,11 +184,10 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
 .trk .thumbbtn:hover::after,.trk.playing .thumbbtn::after{opacity:1}
 .trk.playing .thumbbtn::after{content:'❚❚';font-size:12px}
 .trk.playing{border-color:hsl(var(--gh,170) 60% 55%)}
-.fpvwrap{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 10px}
-.fpv{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--surface-2);min-width:0}
-.fpv b{display:block;margin-bottom:6px;font-size:14px}
-.fpv span{display:block;font-size:13px;line-height:1.3;margin:0 0 6px;overflow-wrap:anywhere}
-.fpv i{display:block;font-style:normal;opacity:.65;font-size:12px}
+.fpvwrap{display:grid;grid-template-columns:1fr;gap:10px;margin:0 0 10px}
+.fpv b.fh{display:block}
+.fpv>b{display:block;margin:0 0 6px;font-size:14px}
+.fpl{list-style:none;margin:0;padding:0;display:grid;gap:6px}
 .pickrow{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;padding:12px 14px;margin:0 0 8px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
 .pickrow b{font-weight:600}.pickrow span{font:400 12px var(--font-mono);color:var(--muted)}
 .pickrow[disabled]{opacity:.45}
@@ -1277,7 +1276,9 @@ function fusePreview(aid,bid){
   return {a:pick(aid),b:pick(bid)};
 }
 function fusePvList(d,ids){
-  return '<div class="fpv"><b>'+esc(d.name||'Untitled deck')+'</b>'+ids.map(function(i){var x=SONGS[i];return x?'<span>'+esc(x.t)+' <i>'+esc(x.a)+'</i></span>':''}).join('')+'</div>';
+  return '<div class="fpv"><b>'+esc(d.name||'Untitled deck')+'</b><ul class="fpl">'+ids.map(function(i){var x=SONGS[i];if(!x)return '';
+    return '<li class="trk" data-id="'+i+'" style="--gh:'+GEN[x.g].h+'"><button class="thumbbtn" data-act="row-play" data-id="'+i+'" aria-label="Play preview of '+esc(x.t)+'">'+thumb(i)+'</button>'
+      +'<span class="tt"><b>'+esc(x.t)+'</b><span>'+esc(x.a)+' · '+esc(x.g)+'</span></span></li>'}).join('')+'</ul></div>';
 }
 function pairRowHtml(a,b,why,total){
   return '<button class="pickrow" data-act="fuse-go" data-a="'+a.id+'" data-b="'+b.id+'" style="flex-direction:column;align-items:flex-start">'
@@ -2132,9 +2133,9 @@ document.addEventListener('click',function(e){
     case 'fuse-open':ST.sheet={type:'fuse'};renderSheet(true);break;
     case 'fuse-pick':d=curDeck();if(d){ST.sheet={type:'fusepick',a:d.id};renderSheet(true)}break;
     case 'fuse-go':ST.sheet={type:'fusename',a:+t.dataset.a,b:+t.dataset.b};ST.sheet.pv=fusePreview(ST.sheet.a,ST.sheet.b);renderSheet(true);break;
-    case 'fuse-shuf':if(ST.sheet&&ST.sheet.type==='fusename'){var nm0=$('#fuse-name');ST.sheet.pv=fusePreview(ST.sheet.a,ST.sheet.b);ST.sheet.nm=nm0?nm0.value:null;renderSheet()}break;
+    case 'fuse-shuf':if(ST.sheet&&ST.sheet.type==='fusename'){sndStop();var nm0=$('#fuse-name');ST.sheet.pv=fusePreview(ST.sheet.a,ST.sheet.b);ST.sheet.nm=nm0?nm0.value:null;renderSheet()}break;
     case 'fuse-name-set':var fi=$('#fuse-name');if(fi){fi.value=t.dataset.name;fi.focus()}break;
-    case 'fuse-confirm':
+    case 'fuse-confirm':sndStop();
       var fn=($('#fuse-name').value||'').trim()||'Fused deck',fa=fuseDecks(+t.dataset.a,+t.dataset.b,fn);
       ST.sheet=null;renderSheet();
       if(fa){ST.deckId=null;ST.roadId=null;ST.tab='decks';render();toast('Fused into '+fa.name+' ('+fa.ids.length+' songs)'+(fa.ids.length>DECK_MAX?'. Use Split to make it exportable.':''))}
@@ -2142,7 +2143,7 @@ document.addEventListener('click',function(e){
     case 'open-deck':ST.deckId=id;ST.confirmDel=false;render();window.scrollTo(0,0);break;
     case 'back-decks':sndStop();ST.deckId=null;ST.roadId=null;ST.confirmDel=false;ST.confirmRoadDel=false;render();break;
     case 'add-songs':ST.sheet={type:'add'};ST.addq='';renderSheet(true);break;
-    case 'close-sheet':if(ST.sheet&&(ST.sheet.type==='peek'||ST.sheet.type==='move'||ST.sheet.type==='tag'))sndStop();var wasTag=ST.sheet&&ST.sheet.type==='tag';ST.sheet=null;renderSheet();if(wasTag)render();break;
+    case 'close-sheet':if(ST.sheet&&(ST.sheet.type==='peek'||ST.sheet.type==='move'||ST.sheet.type==='tag'||ST.sheet.type==='fusename'))sndStop();var wasTag=ST.sheet&&ST.sheet.type==='tag';ST.sheet=null;renderSheet();if(wasTag)render();break;
     case 'road-open':ST.sheet={type:'road',step:'setup',hours:4,moods:{},ex:true,order:'up'};renderSheet(true);break;
     case 'road-hours':ST.sheet.hours=+t.dataset.h;renderSheet();break;
     case 'road-mood':{var rm=ST.sheet.moods;if(rm[t.dataset.m])delete rm[t.dataset.m];else rm[t.dataset.m]=1;renderSheet();break}
