@@ -1249,8 +1249,9 @@ function deckSim(a,b){
   if(gov>=0.3&&top)why.push(Math.round(gov*100)+'% same genre mix ('+top+')');
   return {sc:sc+(total<=DECK_MAX?0.1:0),ok:ok,why:why.join(' · ')||'Similar mix',total:total};
 }
+var FUSE_SKIP=25;
 function fusePairs(){
-  var ds=S.decks.filter(function(d){return !d.ex&&d.ids.length}),out=[];
+  var ds=S.decks.filter(function(d){return !d.ex&&d.ids.length&&d.ids.length<=FUSE_SKIP}),out=[];
   for(var i=0;i<ds.length;i++)for(var j=i+1;j<ds.length;j++){
     var r=deckSim(ds[i],ds[j]);if(r.ok)out.push({a:ds[i],b:ds[j],sc:r.sc,why:r.why,total:r.total});
   }
