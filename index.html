@@ -184,6 +184,11 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
 .trk .thumbbtn:hover::after,.trk.playing .thumbbtn::after{opacity:1}
 .trk.playing .thumbbtn::after{content:'❚❚';font-size:12px}
 .trk.playing{border-color:hsl(var(--gh,170) 60% 55%)}
+.fpvwrap{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 10px}
+.fpv{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--surface-2);min-width:0}
+.fpv b{display:block;margin-bottom:6px;font-size:14px}
+.fpv span{display:block;font-size:13px;line-height:1.3;margin:0 0 6px;overflow-wrap:anywhere}
+.fpv i{display:block;font-style:normal;opacity:.65;font-size:12px}
 .pickrow{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;padding:12px 14px;margin:0 0 8px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
 .pickrow b{font-weight:600}.pickrow span{font:400 12px var(--font-mono);color:var(--muted)}
 .pickrow[disabled]{opacity:.45}
@@ -1266,6 +1271,14 @@ function fuseDecks(aid,bid,name){
   S.decks=S.decks.filter(function(x){return x!==b});
   save();return a;
 }
+function fusePreview(aid,bid){
+  function pick(id){var d=S.decks.find(function(x){return x.id===id});if(!d)return [];var a=d.ids.slice(),o=[];
+    while(a.length&&o.length<3)o.push(a.splice(Math.floor(Math.random()*a.length),1)[0]);return o}
+  return {a:pick(aid),b:pick(bid)};
+}
+function fusePvList(d,ids){
+  return '<div class="fpv"><b>'+esc(d.name||'Untitled deck')+'</b>'+ids.map(function(i){var x=SONGS[i];return x?'<span>'+esc(x.t)+' <i>'+esc(x.a)+'</i></span>':''}).join('')+'</div>';
+}
 function pairRowHtml(a,b,why,total){
   return '<button class="pickrow" data-act="fuse-go" data-a="'+a.id+'" data-b="'+b.id+'" style="flex-direction:column;align-items:flex-start">'
     +'<b>'+esc(a.name||'Untitled deck')+' + '+esc(b.name||'Untitled deck')+'</b>'
@@ -1290,10 +1303,12 @@ function fuseSheetHtml(){
     if(!A||!B)return '';
     var tot=A.ids.filter(function(x){return B.ids.indexOf(x)<0}).length+B.ids.length;
     title='Name the fused deck';
+    var pv=sh.pv||(sh.pv=fusePreview(A.id,B.id));
     body='<p class="sub" style="margin:0 0 10px">'+esc(A.name)+' ('+A.ids.length+') + '+esc(B.name)+' ('+B.ids.length+') = '+tot+' songs.'+(tot>DECK_MAX?' That is over '+DECK_MAX+', so you will get a Split into Pt 1 and Pt 2 button on the Decks screen.':'')+'</p>'
+      +'<div class="fpvwrap">'+fusePvList(A,pv.a)+fusePvList(B,pv.b)+'</div><button class="btn" style="width:100%;margin:0 0 12px" data-act="fuse-shuf">Show other songs</button>'
       +((A.ex||B.ex)?'<p class="syncmsg" style="margin:0 0 10px">One of these was already exported. The fused deck counts as a new deck and is not exported yet, so export it again. The old playlist on YouTube Music stays as it is.</p>':'')
       +'<div class="actions" style="margin:0 0 10px"><button class="btn" data-act="fuse-name-set" data-name="'+esc(A.name)+'">Use "'+esc(A.name)+'"</button><button class="btn" data-act="fuse-name-set" data-name="'+esc(B.name)+'">Use "'+esc(B.name)+'"</button></div>'
-      +'<input id="fuse-name" class="deckname" type="text" maxlength="40" value="'+esc(A.name)+'" aria-label="Fused deck name" autocomplete="off">'
+      +'<input id="fuse-name" class="deckname" type="text" maxlength="40" value="'+esc(sh.nm!=null?sh.nm:A.name)+'" aria-label="Fused deck name" autocomplete="off">'
       +'<button class="btn primary" style="width:100%;margin-top:12px" data-act="fuse-confirm" data-a="'+A.id+'" data-b="'+B.id+'">Fuse into one deck</button>';
   }
   return '<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet pick" role="dialog" aria-label="'+title+'">'
@@ -2116,7 +2131,8 @@ document.addEventListener('click',function(e){
       ST.confirmSplit=false;var r=splitDecks();render();toast('Split '+r.n+(r.n===1?' deck':' decks')+' into '+(r.n+r.made)+' parts. Ready to export.');break;
     case 'fuse-open':ST.sheet={type:'fuse'};renderSheet(true);break;
     case 'fuse-pick':d=curDeck();if(d){ST.sheet={type:'fusepick',a:d.id};renderSheet(true)}break;
-    case 'fuse-go':ST.sheet={type:'fusename',a:+t.dataset.a,b:+t.dataset.b};renderSheet(true);break;
+    case 'fuse-go':ST.sheet={type:'fusename',a:+t.dataset.a,b:+t.dataset.b};ST.sheet.pv=fusePreview(ST.sheet.a,ST.sheet.b);renderSheet(true);break;
+    case 'fuse-shuf':if(ST.sheet&&ST.sheet.type==='fusename'){var nm0=$('#fuse-name');ST.sheet.pv=fusePreview(ST.sheet.a,ST.sheet.b);ST.sheet.nm=nm0?nm0.value:null;renderSheet()}break;
     case 'fuse-name-set':var fi=$('#fuse-name');if(fi){fi.value=t.dataset.name;fi.focus()}break;
     case 'fuse-confirm':
       var fn=($('#fuse-name').value||'').trim()||'Fused deck',fa=fuseDecks(+t.dataset.a,+t.dataset.b,fn);
