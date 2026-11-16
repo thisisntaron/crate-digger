@@ -141,6 +141,10 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 
 /* decks */
 .rdy{color:var(--accent)}
+.dsearch{width:100%;min-height:44px;margin:12px 0 0;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:inherit;font-size:16px}
+.deckrow.ready{border:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--surface))}
+.deckrow.ready .dn{font-weight:700}
+li[hidden]{display:none}
 .sect{margin-top:28px}
 .steps{margin:12px 0 4px;padding-left:20px;display:grid;gap:8px;font-size:14px}
 .tagsongs{margin-top:0!important}
@@ -1199,7 +1203,9 @@ function renderGrid(){
 function deckRowHtml(d){
   var tag=d.ex?' · exported':deckFull(d)?' · <span class="rdy">ready to export</span>':' · '+(DECK_MAX-d.ids.length)+' to go';
   var mo=moodOf(d);
-  return '<li><button class="deckrow'+(mo?' mood':'')+'"'+(mo?' style="--mh:'+mo.h+'"':'')+' data-act="open-deck" data-id="'+d.id+'"><span class="dn">'+esc(d.name||'Untitled deck')+(mo?' '+moodChip(d):'')+'</span><span class="chev" aria-hidden="true">›</span>'
+  var rd=!d.ex&&deckFull(d);
+  var ds=((d.name||'')+' '+d.ids.map(function(i){var x=SONGS[i];return x?x.t+' '+x.a:''}).join(' ')).toLowerCase();
+  return '<li data-s="'+esc(ds)+'"><button class="deckrow'+(mo?' mood':'')+(rd?' ready':'')+'"'+(mo?' style="--mh:'+mo.h+'"':'')+' data-act="open-deck" data-id="'+d.id+'"><span class="dn">'+esc(d.name||'Untitled deck')+(mo?' '+moodChip(d):'')+'</span><span class="chev" aria-hidden="true">›</span>'
     +'<span class="dm">'+d.ids.length+(d.ids.length===1?' song':' songs')+rtx(d.ids)+tag+'</span>'+gbar(d.ids)+'</button></li>';
 }
 function bigDecks(){return S.decks.filter(function(d){return d.ids.length>DECK_MAX})}
@@ -1426,13 +1432,20 @@ function viewDecks(){
   if(ST.roadId)return viewRoad();
   if(ST.deckId)return viewDeck();
   var act=S.decks.filter(function(d){return !d.ex}),done=S.decks.filter(function(d){return d.ex});
+  act=act.filter(function(d){return deckFull(d)}).concat(act.filter(function(d){return !deckFull(d)}));
   return '<div class="row-head"><h2 class="h2">Decks</h2><button class="btn primary" data-act="new-deck">New deck</button></div>'
+    +'<input id="dsearch" class="dsearch" type="search" placeholder="Search decks, songs or artists" value="'+esc(ST.dq||'')+'" autocomplete="off" aria-label="Search decks">'
     +'<p class="sub">Every deck is a playlist of up to '+DECK_MAX+' songs. The bar shows its genre mix. When a deck fills up it is ready to export.</p>'+splitHtml()
     +(function(){var n=untaggedDecks().length;return n?'<button class="btn" style="width:100%;margin:12px 0 0" data-act="tag-open">Tag moods ('+n+' without one)</button>':''})()
     +(function(){var n=fusePairs().length;return n?'<button class="btn" style="width:100%;margin:12px 0 0" data-act="fuse-open">Fuse similar decks ('+n+(n===1?' pair':' pairs')+')</button>':''})()
     +(act.length?'<ul class="decklist">'+act.map(deckRowHtml).join('')+'</ul>':'<p class="empty" style="margin-top:12px">'+(done.length?'No active decks.':'No decks yet. Make one, then add songs from your cards.')+'</p>')
     +(done.length?'<h3 class="h3 sect">Exported</h3><ul class="decklist">'+done.map(deckRowHtml).join('')+'</ul>':'')
-    +roadSection();
+    +roadSection()+'<p class="rnone empty" id="dnone" hidden>No deck, song or artist matches.</p>';
+}
+function filterDecks(){
+  var q=(ST.dq||'').trim().toLowerCase(),hit=0;
+  document.querySelectorAll('.decklist li[data-s]').forEach(function(li){var m=!q||li.dataset.s.indexOf(q)>=0;li.hidden=!m;if(m)hit++});
+  var n=$('#dnone');if(n)n.hidden=!(q&&!hit);
 }
 function viewDeck(){
   var d=curDeck();
@@ -1474,7 +1487,7 @@ function render(){
   if(ST.tab==='packs')app.innerHTML=viewPacks();
   else if(ST.tab==='more')app.innerHTML=viewMore();
   else if(ST.tab==='cards'){app.innerHTML=viewCards();$('#sort').value=ST.sort;renderGrid()}
-  else app.innerHTML=viewDecks();
+  else{app.innerHTML=viewDecks();filterDecks()}
 }
 
 /* ---------- junk list ---------- */
@@ -2190,6 +2203,7 @@ document.addEventListener('input',function(e){
   if(id==='q'){ST.q=e.target.value;renderGrid()}
   else if(id==='add-q'){ST.addq=e.target.value;var al=$('#addlist');if(al)al.innerHTML=addRows()}
   else if(id==='rsearch'){ST.rq=e.target.value;filterRing()}
+  else if(id==='dsearch'){ST.dq=e.target.value;filterDecks()}
   else if(id==='road-rename'){var rr=curRoad();if(rr){rr.name=e.target.value.slice(0,40);save()}}
   else if(id==='deck-name'){var d=curDeck();if(d){d.name=e.target.value.slice(0,40);save()}}
 });
@@ -2197,7 +2211,8 @@ document.addEventListener('change',function(e){
   if(e.target.id==='sort'){ST.sort=e.target.value;renderGrid()}
 });
 document.addEventListener('keydown',function(e){
-  if(e.key==='Enter'&&(e.target.id==='deck-name'||e.target.id==='rsearch')){e.target.blur()}
+  if(e.key==='Enter'&&(e.target.id==='deck-name'||e.target.id==='rsearch'||e.target.id==='dsearch')){e.target.blur()}
+  if(e.key==='Escape'&&e.target.id==='dsearch'&&e.target.value){e.target.value='';ST.dq='';filterDecks();return}
   if(e.key==='Escape'&&e.target.id==='rsearch'&&e.target.value){e.target.value='';ST.rq='';filterRing();return}
   if(e.key==='Enter'&&e.target.id==='newdeck-name'){makeNamedDeck();return}
   if(e.key==='Escape'&&document.getElementById('namepanel')){closeNamePanel();return}
