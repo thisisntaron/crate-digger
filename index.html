@@ -1269,7 +1269,7 @@ function deckSim(a,b){
   if(gov>=0.3&&top)why.push(Math.round(gov*100)+'% same genre mix ('+top+')');
   return {sc:sc+(total<=DECK_MAX?0.1:0),ok:ok,why:why.join(' · ')||'Similar mix',total:total};
 }
-var FUSE_SKIP=25;
+var FUSE_SKIP=45;
 function fusePairs(){
   var ds=S.decks.filter(function(d){return !d.ex&&d.ids.length&&d.ids.length<=FUSE_SKIP}),out=[];
   for(var i=0;i<ds.length;i++)for(var j=i+1;j<ds.length;j++){
@@ -1833,7 +1833,7 @@ function junkIds(){return Object.keys(S.junk||{}).filter(function(id){return SON
 function leaveOtherDecks(id,keep){S.decks.forEach(function(d){if(d!==keep){var k=d.ids.indexOf(id);if(k>=0)d.ids.splice(k,1)}})}
 function deckOf(id){return S.decks.find(function(d){return d.ids.indexOf(id)>=0})}
 /* A deck holds at most DECK_MAX songs. A full deck is ready to export and leaves the tile grid. Exported decks (d.ex) are archived. */
-var DECK_MAX=30;
+var DECK_MAX=50;
 function deckFull(d){return d.ids.length>=DECK_MAX}
 function deckOpen(d){return !d.ex&&!deckFull(d)}
 function openNamePanel(cid){
