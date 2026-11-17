@@ -7,6 +7,7 @@ Playlists are created PRIVATE. Open them in YouTube Music and change that if you
 Usage (Mac Terminal, or through the launcher):
   python3 yt_playlists.py list           show your decks and which are ready
   python3 yt_playlists.py                make playlists for decks that are full (50 songs) and not exported
+  add --min 20 to include every deck with at least 20 songs instead of only full ones
   python3 yt_playlists.py all            every deck that is not exported
   python3 yt_playlists.py "chill"        decks whose name contains "chill"
   add --again to remake a deck that was already created
@@ -81,8 +82,14 @@ def video_id(sid, ymap):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    again, dry = "--again" in sys.argv, "--dry" in sys.argv
+    argv = sys.argv[1:]
+    minn = DECK_MAX
+    if "--min" in argv:
+        i = argv.index("--min")
+        minn = int(argv[i + 1])
+        del argv[i:i + 2]
+    args = [a for a in argv if not a.startswith("--")]
+    again, dry = "--again" in argv, "--dry" in argv
     mode = args[0] if args else "ready"
     st = newest_backup()
     songs = st.get("songs", {})
@@ -95,10 +102,10 @@ def main():
         for d in decks:
             n = len(d["ids"]); ok = sum(1 for i in d["ids"] if video_id(i, ymap))
             print("%-34s %2d songs, %2d exact%s%s" % ((d.get("name") or "Untitled")[:34], n, ok,
-                  "  READY" if n >= DECK_MAX else "", "  (already created)" if str(d["id"]) in made else ""))
+                  "  READY" if n >= minn else "", "  (already created)" if str(d["id"]) in made else ""))
         return
     if mode == "ready":
-        pick = [d for d in decks if len(d["ids"]) >= DECK_MAX]
+        pick = [d for d in decks if len(d["ids"]) >= minn]
     elif mode == "all":
         pick = decks
     else:
