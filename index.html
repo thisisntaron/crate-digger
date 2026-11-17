@@ -1262,6 +1262,9 @@ function genreShare(d){
   var m={};d.ids.forEach(function(id){var o=SONGS[id];if(o&&o.g!=='Other')m[o.g]=(m[o.g]||0)+1});
   Object.keys(m).forEach(function(g){m[g]/=d.ids.length});return m;
 }
+/* Decks whose moods sit far apart on the energy scale are not suggested for fusing. Untagged decks are not blocked. */
+var FUSE_MOOD_GAP=2;
+function moodGap(a,b){return (moodOf(a)&&moodOf(b))?Math.abs(moodRank(a)-moodRank(b)):0}
 /* Similarity of two decks: shared artists (weighted most) plus how much their genre mixes overlap. */
 function deckSim(a,b){
   var am=artistMap(a),bm=artistMap(b),shared=Object.keys(am).filter(function(k){return bm[k]}).map(function(k){return am[k]});
@@ -1270,7 +1273,7 @@ function deckSim(a,b){
   var ga=genreShare(a),gb=genreShare(b),gov=0,top=null,topv=0;
   Object.keys(ga).forEach(function(g){if(gb[g]){var v=Math.min(ga[g],gb[g]);gov+=v;if(v>topv){topv=v;top=g}}});
   var sc=0.6*artist+0.4*gov,total=a.ids.length+b.ids.length;
-  var ok=(shared.length>0||gov>=0.6)&&sc>=0.3&&total<=DECK_MAX*2;
+  var ok=(shared.length>0||gov>=0.6)&&sc>=0.3&&total<=DECK_MAX*2&&moodGap(a,b)<=FUSE_MOOD_GAP;
   var why=[];
   if(shared.length)why.push('Shares '+shared.slice(0,3).join(', ')+(shared.length>3?' +'+(shared.length-3):''));
   if(gov>=0.3&&top)why.push(Math.round(gov*100)+'% same genre mix ('+top+')');
@@ -1305,7 +1308,7 @@ function fusePvList(d,ids){
 }
 function pairRowHtml(a,b,why,total){
   return '<button class="pickrow" data-act="fuse-go" data-a="'+a.id+'" data-b="'+b.id+'" style="flex-direction:column;align-items:flex-start">'
-    +'<b>'+esc(a.name||'Untitled deck')+' + '+esc(b.name||'Untitled deck')+'</b>'
+    +'<b>'+esc(a.name||'Untitled deck')+moodChip(a)+' + '+esc(b.name||'Untitled deck')+moodChip(b)+'</b>'
     +'<span>'+a.ids.length+' + '+b.ids.length+' = '+total+(total>DECK_MAX?' (needs a split)':'')+(why?' · '+esc(why):'')+'</span></button>';
 }
 function fuseSheetHtml(){
