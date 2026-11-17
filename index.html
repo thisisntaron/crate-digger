@@ -1509,8 +1509,9 @@ function viewDeck(){
     +(d.ids.length?'<ol class="tracks">'+rows+'</ol>':'<p class="empty" style="margin-top:12px">Empty deck. Tap Add songs to pull cards from your collection.</p>');
 }
 /* ---------- listen: pick a mood, get a few playlists, play one shuffled in YouTube ---------- */
+var LISTEN_MIN=20;
 function listenDecks(mood){
-  return S.decks.filter(function(d){return (mood==='any'||d.mood===mood)&&ytSplit(d).ok.length>=3});
+  return S.decks.filter(function(d){return (mood==='any'||d.mood===mood)&&d.ids.length>=LISTEN_MIN&&ytSplit(d).ok.length>=3});
 }
 function shuffleArr(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1)),t=a[i];a[i]=a[j];a[j]=t}return a}
 function listenPick(){
@@ -1535,7 +1536,7 @@ function viewListen(){
   var out='<div class="row-head"><h2 class="h2">Listen</h2></div><p class="lhint">Pick a mood and I will offer a few playlists. Play opens YouTube with the songs already shuffled.</p><div class="lgrid">'+tiles+'</div>';
   if(ST.lmood){
     var ds=(ST.lpick||[]).map(function(id){return S.decks.find(function(d){return d.id===id})}).filter(Boolean);
-    if(!ds.length)out+='<p class="empty">No playlists with this mood have enough exactly matched songs yet.</p>';
+    if(!ds.length)out+='<p class="empty">No playlists with this mood have '+LISTEN_MIN+' songs yet.</p>';
     else out+='<div class="lpicks">'+ds.map(listenCard).join('')+'</div>'
       +(listenDecks(ST.lmood).length>ds.length?'<button class="btn" style="width:100%;margin-top:12px" data-act="l-more">Show other choices</button>':'');
   }
