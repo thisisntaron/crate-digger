@@ -333,6 +333,21 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
 
 /* playlist tiles */
 .cin{width:100%;animation:rise .35s ease-out}
+.lhint{margin:6px 0 12px;color:var(--muted);font-size:14px}
+.lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.ltile{display:flex;flex-direction:column;gap:4px;align-items:flex-start;text-align:left;padding:12px;min-height:64px;border-radius:12px;border:1.5px solid hsl(var(--mh) 50% 38%);background:hsl(var(--mh) 45% 14%);color:hsl(var(--mh) 85% 82%);font-family:var(--font-body)}
+.ltile b{font:700 15px/1.1 var(--font-display)}
+.ltile span{font-size:12px;opacity:.75}
+.ltile.on{background:hsl(var(--mh) 65% 55%);border-color:hsl(var(--mh) 65% 55%);color:#111}
+.ltile:disabled{opacity:.35}
+.lpicks{display:grid;gap:10px;margin-top:14px}
+@media(min-width:700px){.lpicks{grid-template-columns:repeat(3,1fr)}}
+.lcard{border:1px solid var(--line);border-left:6px solid hsl(var(--mh) 60% 50%);border-radius:12px;padding:12px;background:var(--surface);display:flex;flex-direction:column;gap:6px}
+.lc-top{display:flex;align-items:center;flex-wrap:wrap;gap:4px}
+.lc-top b{font-size:16px}
+.lc-meta{font-size:12px;color:var(--muted)}
+.lc-art{font-size:13px;min-height:2.6em;overflow-wrap:anywhere}
+.lcard .btn{margin-top:4px}
 .mchip{display:inline-block;vertical-align:middle;margin-left:6px;padding:2px 8px;border-radius:99px;font:700 10px/1.3 var(--font-display);letter-spacing:.06em;text-transform:uppercase;background:hsl(var(--mh) 60% 22%);color:hsl(var(--mh) 85% 78%);border:1px solid hsl(var(--mh) 55% 42%)}
 .moodrow{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
 .mpick{font:600 12px/1 var(--font-body);padding:7px 10px;border-radius:99px;border:1.5px solid hsl(var(--mh) 55% 45%);background:transparent;color:hsl(var(--mh) 80% 75%)}
@@ -381,6 +396,7 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
     <button class="tab" data-act="tab" data-tab="packs"><span>Packs</span><span class="badge" id="badge" hidden></span></button>
     <button class="tab" data-act="tab" data-tab="cards">Cards</button>
     <button class="tab" data-act="tab" data-tab="decks">Decks</button>
+    <button class="tab" data-act="tab" data-tab="listen">Listen</button>
     <button class="tab" data-act="tab" data-tab="more">More</button>
   </div>
 </nav>
@@ -481,7 +497,7 @@ function spotTick(){
 /* Exact YouTube Music video ids for Spotify songs (ytmap.json: {spotifyId:[videoId,score]}), made by tools/yt_match.py. */
 var YTMAP={};
 function loadYtMap(){
-  try{fetch('ytmap.json').then(function(r){return r.ok?r.json():null}).then(function(j){if(j)YTMAP=j}).catch(function(){})}catch(e){}
+  try{fetch('ytmap.json').then(function(r){return r.ok?r.json():null}).then(function(j){if(j){YTMAP=j;if(ST.tab==='listen')render()}}).catch(function(){})}catch(e){}
 }
 function ytId(id){return String(id).length===11?String(id):(YTMAP[id]&&YTMAP[id][0])||''}
 function loadSpot(){
@@ -1492,6 +1508,39 @@ function viewDeck(){
     +'<textarea id="export" class="export" readonly hidden rows="8" aria-label="Playlist text"></textarea>'
     +(d.ids.length?'<ol class="tracks">'+rows+'</ol>':'<p class="empty" style="margin-top:12px">Empty deck. Tap Add songs to pull cards from your collection.</p>');
 }
+/* ---------- listen: pick a mood, get a few playlists, play one shuffled in YouTube ---------- */
+function listenDecks(mood){
+  return S.decks.filter(function(d){return (mood==='any'||d.mood===mood)&&ytSplit(d).ok.length>=3});
+}
+function shuffleArr(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1)),t=a[i];a[i]=a[j];a[j]=t}return a}
+function listenPick(){
+  var pool=listenDecks(ST.lmood),seen=ST.lseen||[];
+  var fresh=pool.filter(function(d){return seen.indexOf(d.id)<0}),rest=pool.filter(function(d){return seen.indexOf(d.id)>=0});
+  var pick=shuffleArr(fresh).concat(shuffleArr(rest)).slice(0,3).map(function(d){return d.id});
+  ST.lpick=pick;ST.lseen=fresh.length>=3?seen.concat(pick):pick;
+}
+function listenCard(d){
+  var sp=ytSplit(d),m=moodOf(d),h=m?m.h:215;
+  var seen={},art=[];shuffleArr(d.ids).forEach(function(i){var x=SONGS[i];if(x&&x.a&&!seen[x.a]&&art.length<4){seen[x.a]=1;art.push(x.a)}});
+  return '<div class="lcard" style="--mh:'+h+'"><div class="lc-top"><b>'+esc(d.name||'Untitled deck')+'</b>'+moodChip(d)+'</div>'
+    +'<div class="lc-meta">'+sp.ok.length+' songs'+(sp.miss.length?' ('+sp.miss.length+' can\'t be played exactly and are skipped)':'')+'</div>'
+    +'<div class="lc-art">'+esc(art.join(' · '))+'</div>'
+    +'<button class="btn primary" data-act="l-play" data-id="'+d.id+'">Play shuffled</button></div>';
+}
+function viewListen(){
+  var tiles=[{k:'any',n:'Any mood',h:215}].concat(MOODS).map(function(m){
+    var n=listenDecks(m.k).length;
+    return '<button class="ltile'+(ST.lmood===m.k?' on':'')+'" style="--mh:'+m.h+'" data-act="l-mood" data-mood="'+m.k+'"'+(n?'':' disabled')+'><b>'+m.n+'</b><span>'+n+(n===1?' playlist':' playlists')+'</span></button>';
+  }).join('');
+  var out='<div class="row-head"><h2 class="h2">Listen</h2></div><p class="lhint">Pick a mood and I will offer a few playlists. Play opens YouTube with the songs already shuffled.</p><div class="lgrid">'+tiles+'</div>';
+  if(ST.lmood){
+    var ds=(ST.lpick||[]).map(function(id){return S.decks.find(function(d){return d.id===id})}).filter(Boolean);
+    if(!ds.length)out+='<p class="empty">No playlists with this mood have enough exactly matched songs yet.</p>';
+    else out+='<div class="lpicks">'+ds.map(listenCard).join('')+'</div>'
+      +(listenDecks(ST.lmood).length>ds.length?'<button class="btn" style="width:100%;margin-top:12px" data-act="l-more">Show other choices</button>':'');
+  }
+  return out;
+}
 function render(){
   if(ST.tab!=='decks'||ST.deckId)ST.confirmSplit=false;
   $('#stats').textContent=ownedIds().length+' cards · '+S.decks.length+(S.decks.length===1?' deck':' decks');
@@ -1503,6 +1552,7 @@ function render(){
   var app=$('#app');
   if(ST.tab==='packs')app.innerHTML=viewPacks();
   else if(ST.tab==='more')app.innerHTML=viewMore();
+  else if(ST.tab==='listen')app.innerHTML=viewListen();
   else if(ST.tab==='cards'){app.innerHTML=viewCards();$('#sort').value=ST.sort;renderGrid()}
   else{app.innerHTML=viewDecks();filterDecks()}
 }
@@ -2198,6 +2248,9 @@ document.addEventListener('click',function(e){
       break;
     case 'copy':copyDeck();break;
     case 'export':ST.sheet={type:'export'};renderSheet(true);break;
+    case 'l-mood':ST.lmood=t.dataset.mood;ST.lseen=[];listenPick();render();var lp=document.querySelector('.lpicks');if(lp)lp.scrollIntoView({block:'nearest',behavior:'smooth'});break;
+    case 'l-more':listenPick();render();break;
+    case 'l-play':{d=S.decks.find(function(x){return x.id===id});if(d){var ids=shuffleArr(ytSplit(d).ok).slice(0,50);if(ids.length)window.open('https://www.youtube.com/watch_videos?video_ids='+ids.join(','),'_blank','noopener')}break}
     case 'yt-playlist':{d=curDeck();if(d&&ytSplit(d).ok.length)window.open(ytUrl(d),'_blank','noopener');break}
     case 'export-csv':exportCsv();break;
     case 'copy-sheet':{d=curDeck();if(d){var tx=deckText(d);try{navigator.clipboard.writeText(tx).then(function(){toast('Playlist text copied')},function(){toast('Could not copy')})}catch(e2){toast('Could not copy')}}break}
