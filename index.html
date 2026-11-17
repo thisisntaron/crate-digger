@@ -1803,7 +1803,7 @@ function nextInQueue(){
 }
 function gotoNext(auto){
   var n=nextInQueue();
-  sndStop();
+  sndStop();ST.rq='';
   if(n===null){
     toast("That was the last card in the list. You've been through all of them.");
     if(auto){ST.radial=null;renderOverlay();render()}
@@ -2121,7 +2121,7 @@ document.addEventListener('click',function(e){
       render();break;
     case 'done':sndStop();ST.open=null;ST.pick=null;renderOverlay();render();break;
     case 'card':
-      ST.radial={id:sid};
+      ST.rq='';ST.radial={id:sid};
       ST.radial.q=Array.prototype.map.call(document.querySelectorAll('#grid .cardbtn'),function(b){return b.dataset.id});
       ST.radial.u=ST.gf==='unsorted';
       renderOverlay();if(ST.auto)pvStart(sid);break;
@@ -2289,7 +2289,7 @@ document.addEventListener('keydown',function(e){
   if(e.key==='Escape'&&document.getElementById('namepanel')){closeNamePanel();return}
   if(e.key==='Escape'){
     if(ST.sheet){ST.sheet=null;renderSheet()}
-    else if(ST.radial){sndStop();ST.radial=null;renderOverlay();render()}
+    else if(ST.radial){sndStop();ST.rq='';ST.radial=null;renderOverlay();render()}
     else if(ST.open&&ST.open.phase!=='cards'){sndStop();ST.open=null;renderOverlay();render()}
   }
 });
