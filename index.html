@@ -333,6 +333,13 @@ input.deckname{font:800 28px/1.1 var(--font-display);letter-spacing:-.015em;back
 
 /* playlist tiles */
 .cin{width:100%;animation:rise .35s ease-out}
+.rechead{display:flex;align-items:center;gap:8px;flex:0 0 auto;min-width:0}
+.rmw{display:flex;align-items:center;gap:6px;flex:1;min-width:0;justify-content:flex-end}
+.rmw input[type=range]{flex:1 1 90px;max-width:200px;min-width:60px;height:22px;margin:0;accent-color:hsl(var(--mh) 65% 55%);opacity:.55;touch-action:pan-y}
+.rmw.on input[type=range]{opacity:1}
+.rmw b{font:700 10px/1 var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.rmw.on b{color:hsl(var(--mh) 80% 72%)}
+.rmoff{border:0;background:transparent;color:var(--muted);font-size:18px;line-height:1;padding:2px 6px;min-width:28px;min-height:28px}
 .lhint{margin:6px 0 12px;color:var(--muted);font-size:14px}
 .lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
 .ltile{display:flex;flex-direction:column;gap:4px;align-items:flex-start;text-align:left;padding:12px;min-height:64px;border-radius:12px;border:1.5px solid hsl(var(--mh) 50% 38%);background:hsl(var(--mh) 45% 14%);color:hsl(var(--mh) 85% 82%);font-family:var(--font-body)}
@@ -1723,7 +1730,7 @@ function moodPickerHtml(cur,act){
    that can lift a close genre match but never outranks a same-artist deck. Top REC_MAX, empty decks skipped. */
 function recDecks(id){
   var s=SONGS[id];if(!s)return [];
-  var mine=artistKeys(s.a),out=[],votes={},vt=0;
+  var mine=artistKeys(s.a),out=[],votes={},vt=0,slide=(typeof ST.rmood==='number')?ST.rmood:null;
   function stat(d){
     var am=0,gm=0;
     d.ids.forEach(function(x){var o=SONGS[x];if(!o||x===id)return;
@@ -1742,13 +1749,25 @@ function recDecks(id){
   S.decks.filter(deckOpen).forEach(function(d){
     if(!d.ids.length||d.ids.indexOf(id)>=0)return;
     var t=stat(d),share=t.gm/d.ids.length,sc=0,bonus=(exp&&d.mood===exp)?15*conf:0;
-    if(t.am>0)sc=100+Math.min(t.am,5)*10+share*10+bonus*0.4;
+    if(slide!==null){
+      /* slider on: artist matches still outrank everything else, but within a tier the mood you dialled in decides */
+      var fit=d.mood?1-Math.min(Math.abs(moodRank(d)-slide),4)/4:0;
+      if(t.am>0)sc=100+Math.min(t.am,5)*3+share*5+fit*30;
+      else if(share>=0.4&&t.gm>=2)sc=Math.min(share*100,85)+fit*12;
+    }
+    else if(t.am>0)sc=100+Math.min(t.am,5)*10+share*10+bonus*0.4;
     else if(share>=0.4&&t.gm>=2)sc=share*100+bonus;
     else if(bonus>0&&share>=0.25&&t.gm>=2)sc=share*100+bonus;
     if(sc>0)out.push({id:d.id,sc:sc,n:d.ids.length});
   });
   out.sort(function(a,b){return b.sc-a.sc||b.n-a.n});
   return out.slice(0,REC_MAX).map(function(x){return x.id});
+}
+function recMoodAt(v){return MOODS[Math.max(0,Math.min(MOODS.length-1,Math.round(v)))]}
+function recHead(){
+  var on=typeof ST.rmood==='number',v=on?ST.rmood:4,m=recMoodAt(v);
+  return '<div class="rechead"><span class="rechd">Recommended</span><span class="rmw'+(on?' on':'')+'" style="--mh:'+m.h+'"><input type="range" id="rmood" min="0" max="8" step="0.1" value="'+v+'" aria-label="Mood for recommendations"><b id="rmlab">'+(on?m.n:'Any mood')+'</b>'
+    +(on?'<button class="rmoff" data-act="rm-off" aria-label="Turn mood off">×</button>':'')+'</span></div>';
 }
 function ringHtml(id){
   var items=[];
@@ -1761,7 +1780,7 @@ function ringHtml(id){
   }
   var html='';
   if(recs.length){
-    html+='<div class="recwrap" style="--r3:'+Math.ceil(recs.length/3)+';--r2:'+Math.ceil(recs.length/2)+'"><span class="rechd">Recommended</span><div class="recrow">'
+    html+='<div class="recwrap" style="--r3:'+Math.ceil(recs.length/3)+';--r2:'+Math.ceil(recs.length/2)+'">'+recHead()+'<div class="recrow">'
       +recs.map(function(rid,j){var it=items.filter(function(x){return x.id===rid})[0];return it?tile(it,j,' rec'):''}).join('')+'</div></div>';
   }
   html+=items.map(function(it,k){return tile(it,k,'')}).join('');
@@ -2251,6 +2270,7 @@ document.addEventListener('click',function(e){
     case 'copy':copyDeck();break;
     case 'export':ST.sheet={type:'export'};renderSheet(true);break;
     case 'l-mood':ST.lmood=t.dataset.mood;ST.lseen=[];listenPick();render();var lp=document.querySelector('.lpicks');if(lp)lp.scrollIntoView({block:'nearest',behavior:'smooth'});break;
+    case 'rm-off':{ST.rmood=null;var rc2=curCardId();if(rc2)fillRing(rc2,false);break}
     case 'l-more':listenPick();render();break;
     case 'l-play':{d=S.decks.find(function(x){return x.id===id});if(d){var ids=shuffleArr(ytSplit(d).ok).slice(0,50);if(ids.length)window.open('https://www.youtube.com/watch_videos?video_ids='+ids.join(','),'_blank','noopener')}break}
     case 'yt-playlist':{d=curDeck();if(d&&ytSplit(d).ok.length)window.open(ytUrl(d),'_blank','noopener');break}
@@ -2277,11 +2297,13 @@ document.addEventListener('input',function(e){
   else if(id==='add-q'){ST.addq=e.target.value;var al=$('#addlist');if(al)al.innerHTML=addRows()}
   else if(id==='rsearch'){ST.rq=e.target.value;filterRing()}
   else if(id==='dsearch'){ST.dq=e.target.value;filterDecks()}
+  else if(id==='rmood'){ST.rmood=+e.target.value;var mm=recMoodAt(ST.rmood),w=e.target.closest('.rmw'),lb=$('#rmlab');if(w){w.classList.add('on');w.style.setProperty('--mh',mm.h)}if(lb)lb.textContent=mm.n}
   else if(id==='road-rename'){var rr=curRoad();if(rr){rr.name=e.target.value.slice(0,40);save()}}
   else if(id==='deck-name'){var d=curDeck();if(d){d.name=e.target.value.slice(0,40);save()}}
 });
 document.addEventListener('change',function(e){
   if(e.target.id==='sort'){ST.sort=e.target.value;renderGrid()}
+  else if(e.target.id==='rmood'){var rc=curCardId();if(rc)fillRing(rc,false)}
 });
 document.addEventListener('keydown',function(e){
   if(e.key==='Enter'&&(e.target.id==='deck-name'||e.target.id==='rsearch'||e.target.id==='dsearch')){e.target.blur()}
