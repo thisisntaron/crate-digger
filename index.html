@@ -1864,6 +1864,7 @@ function newDeck(ids){
   S.decks.push(d);save();return d;
 }
 function finishCard(fate){
+  ST.rq='';
   if(ST.radial){if(ST.radial.q){gotoNext(true);return}sndStop();ST.radial=null;renderOverlay();render();return}
   var o=ST.open;if(!o||o.phase!=='cards')return;
   o.cards[o.i].fate=fate;sndStop();
@@ -1874,7 +1875,7 @@ function finishCard(fate){
 /* ---------- pack opening ---------- */
 function beginOpen(pid){
   var p=S.packs.find(function(x){return x.id===pid});if(!p)return;
-  ST.open={pid:pid,pack:{id:p.id,ids:p.ids.slice()},phase:'sealed',cards:[],i:0,flipped:false,busy:false};
+  ST.rq='';ST.open={pid:pid,pack:{id:p.id,ids:p.ids.slice()},phase:'sealed',cards:[],i:0,flipped:false,busy:false};
   renderOverlay();
 }
 function tear(){
@@ -1891,7 +1892,7 @@ function tear(){
   var wait=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches?0:600;
   setTimeout(function(){
     if(ST.open!==o)return;
-    o.phase='cards';o.i=0;o.flipped=false;o.busy=false;renderOverlay();
+    ST.rq='';o.phase='cards';o.i=0;o.flipped=false;o.busy=false;renderOverlay();
   },wait);
 }
 function flipTap(){
