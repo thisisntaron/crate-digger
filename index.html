@@ -1718,7 +1718,7 @@ function renderSheet(anim){
 /* ---------- radial menu ---------- */
 function artistKeys(a){return String(a||'').toLowerCase().split(/\s*(?:,|&|\+|\bfeat\.?|\bft\.?|\bwith\b|\bx\b)\s*/).map(function(x){return x.trim()}).filter(Boolean)}
 /* Recommended decks for a song: same artist already in the deck ranks highest, then the deck's share of the song's genre (40%+, never "Other"). Top REC_MAX (6), empty decks skipped. */
-var REC_MAX=6;
+var REC_MAX=6,REC_MOOD_SPAN=2;
 /* Moods, ordered low to high energy. Each playlist can carry one; tiles sort in this order and wear the colour. */
 var MOODS=[{k:'sad',n:'Sad',h:225},{k:'ponderous',n:'Ponderous',h:252},{k:'dreamy',n:'Dreamy',h:285},{k:'chill',n:'Chill',h:188},
   {k:'angsty',n:'Angsty',h:320},{k:'dancy',n:'Dancy',h:50},{k:'upbeat',n:'Upbeat',h:135},{k:'energetic',n:'Energetic',h:24},{k:'angry',n:'Angry',h:2}];
@@ -1751,6 +1751,7 @@ function recDecks(id){
   if(exp)conf=votes[exp]/vt;
   S.decks.filter(deckOpen).forEach(function(d){
     if(!d.ids.length||d.ids.indexOf(id)>=0)return;
+    if(slide!==null&&!(d.mood&&Math.abs(moodRank(d)-slide)<=REC_MOOD_SPAN))return;
     var t=stat(d),share=t.gm/d.ids.length,sc=0,bonus=(exp&&d.mood===exp)?15*conf:0;
     if(slide!==null){
       /* slider on: artist matches still outrank everything else, but within a tier the mood you dialled in decides */
@@ -1764,6 +1765,14 @@ function recDecks(id){
     if(sc>0)out.push({id:d.id,sc:sc,n:d.ids.length});
   });
   out.sort(function(a,b){return b.sc-a.sc||b.n-a.n});
+  if(slide!==null&&out.length<REC_MAX){
+    /* not enough matches: fill with decks of the dialled-in mood itself, best genre fit first */
+    var mk=recMoodAt(slide).k,have={};out.forEach(function(x){have[x.id]=1});
+    var fill=S.decks.filter(deckOpen).filter(function(d){return d.mood===mk&&d.ids.length&&d.ids.indexOf(id)<0&&!have[d.id]})
+      .map(function(d){var t=stat(d);return {id:d.id,sc:t.gm/d.ids.length,n:d.ids.length}});
+    fill.sort(function(a,b){return b.sc-a.sc||b.n-a.n});
+    out=out.concat(fill);
+  }
   return out.slice(0,REC_MAX).map(function(x){return x.id});
 }
 function recMoodAt(v){return MOODS[Math.max(0,Math.min(MOODS.length-1,Math.round(v)))]}
@@ -1782,8 +1791,8 @@ function ringHtml(id){
       +' style="--k:'+k+(it.m?';--mh:'+it.m.h:'')+'"><span class="rl">'+esc(it.label)+'</span>'+(it.k==='deck'?'<span class="rc">'+it.n+'/'+DECK_MAX+(it.m?' · '+it.m.n:'')+'</span>':'')+(it.k==='deck'&&it.last&&it.last.length?'<span class="rs">'+it.last.map(function(t){return '<i>'+esc(t)+'</i>'}).join('')+'</span>':'')+'</button>';
   }
   var html='';
-  if(recs.length){
-    html+='<div class="recwrap" style="--r3:'+Math.ceil(recs.length/3)+';--r2:'+Math.ceil(recs.length/2)+'">'+recHead()+'<div class="recrow">'
+  if(recs.length||typeof ST.rmood==='number'||S.decks.some(function(d){return d.mood&&deckOpen(d)})){
+    html+='<div class="recwrap" style="--r3:'+Math.max(1,Math.ceil(recs.length/3))+';--r2:'+Math.max(1,Math.ceil(recs.length/2))+'">'+recHead()+'<div class="recrow">'
       +recs.map(function(rid,j){var it=items.filter(function(x){return x.id===rid})[0];return it?tile(it,j,' rec'):''}).join('')+'</div></div>';
   }
   html+=items.map(function(it,k){return tile(it,k,'')}).join('');
