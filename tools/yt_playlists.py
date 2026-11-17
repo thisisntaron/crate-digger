@@ -19,7 +19,7 @@ It reads the newest crate-digger-backup*.json in Downloads, Documents or Desktop
 One-time sign-in: see SETUP below. The sign-in stays in ~/.crate-digger-tools on this Mac.
 SETUP: in Chrome, open music.youtube.com signed in, press F12 (or Option+Cmd+I), Network tab,
 type "browse" in the filter, click any row (a POST that says 200), find "Request Headers",
-right-click, Copy request headers. Open TextEdit, Format menu, Make Plain Text, paste,
+right-click, Copy request headers (or, if Chrome has no such item, Copy, Copy as cURL). Open TextEdit, Format menu, Make Plain Text, paste,
 save as ytm-headers.txt in Downloads. Run this script. It converts the file and deletes it.
 """
 import json, os, sys, time, urllib.request, subprocess
@@ -56,6 +56,20 @@ def newest_backup():
         sys.exit("No crate-digger-backup*.json in Downloads, Documents or Desktop. Make a backup in the app first (More, Back up).")
     print("Using", os.path.basename(files[-1]), flush=True)
     return json.load(open(files[-1]))["state"]
+
+
+def curl_to_headers(text):
+    """Chrome's "Copy as cURL" -> plain "name: value" header lines. Plain header text is returned unchanged."""
+    import re
+    if not text.lstrip().startswith("curl"):
+        return text
+    text = text.replace("\\\n", " ")
+    lines = [m.group(1) for m in re.finditer(r"(?:-H|--header)\s+'((?:[^'\\]|\\.)*)'", text)]
+    lines = [l for l in lines if not l.startswith(":")]
+    ck = re.search(r"(?:-b|--cookie)\s+'([^']*)'", text)
+    if ck and not any(l.lower().startswith("cookie:") for l in lines):
+        lines.append("cookie: " + ck.group(1))
+    return "\n".join(lines)
 
 
 def video_id(sid, ymap):
@@ -104,7 +118,7 @@ def main():
             if not os.path.exists(HEADERS_TXT):
                 sys.exit("Sign-in not set up yet. See the SETUP steps at the top of yt_playlists.py (or ask Claude). Save the headers as ~/Downloads/ytm-headers.txt and run again.")
             import ytmusicapi
-            ytmusicapi.setup(filepath=AUTH, headers_raw=open(HEADERS_TXT).read())
+            ytmusicapi.setup(filepath=AUTH, headers_raw=curl_to_headers(open(HEADERS_TXT).read()))
             os.chmod(AUTH, 0o600)
             os.remove(HEADERS_TXT)
             print("Sign-in saved. Deleted ytm-headers.txt.", flush=True)
