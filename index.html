@@ -1284,13 +1284,15 @@ function deckSim(a,b){
   return {sc:sc+(total<=DECK_MAX?0.1:0),ok:ok,why:why.join(' · ')||'Similar mix',total:total};
 }
 var FUSE_SKIP=45;
-function fusePairs(){
+function pairKey(a,b){return Math.min(a.id,b.id)+'-'+Math.max(a.id,b.id)}
+function fusePairs(skip,all){
   var ds=S.decks.filter(function(d){return !d.ex&&d.ids.length&&d.ids.length<=FUSE_SKIP}),out=[];
   for(var i=0;i<ds.length;i++)for(var j=i+1;j<ds.length;j++){
     var r=deckSim(ds[i],ds[j]);if(r.ok)out.push({a:ds[i],b:ds[j],sc:r.sc,why:r.why,total:r.total});
   }
   out.sort(function(x,y){return y.sc-x.sc});
-  return out.slice(0,8);
+  if(skip&&skip.length)out=out.filter(function(p){return skip.indexOf(pairKey(p.a,p.b))<0});
+  return all?out:out.slice(0,8);
 }
 function fuseDecks(aid,bid,name){
   var a=S.decks.find(function(x){return x.id===aid}),b=S.decks.find(function(x){return x.id===bid});
@@ -1318,9 +1320,10 @@ function pairRowHtml(a,b,why,total){
 function fuseSheetHtml(){
   var sh=ST.sheet,body='',title='Fuse decks';
   if(sh.type==='fuse'){
-    var ps=fusePairs();
+    var ps=fusePairs(sh.seen);
     body='<p class="sub" style="margin:0 0 12px">Decks that look alike. Pick a pair to merge into one.</p>'
-      +(ps.length?ps.map(function(p){return pairRowHtml(p.a,p.b,p.why,p.total)}).join(''):'<p class="empty">No similar decks right now. You can still fuse by hand from inside a deck.</p>');
+      +(ps.length?ps.map(function(p){return pairRowHtml(p.a,p.b,p.why,p.total)}).join(''):'<p class="empty">No similar decks right now. You can still fuse by hand from inside a deck.</p>')
+      +(ps.length&&(fusePairs(sh.seen,true).length>ps.length||(sh.seen&&sh.seen.length))?'<button class="btn" style="width:100%;margin-top:12px" data-act="fuse-refresh">Show different suggestions</button>':'');
   }else if(sh.type==='fusepick'){
     var a=S.decks.find(function(x){return x.id===sh.a});
     title='Fuse with...';
@@ -2233,6 +2236,11 @@ document.addEventListener('click',function(e){
     case 'split-decks':
       if(!ST.confirmSplit){ST.confirmSplit=true;render();break}
       ST.confirmSplit=false;var r=splitDecks();render();toast('Split '+r.n+(r.n===1?' deck':' decks')+' into '+(r.n+r.made)+' parts. Ready to export.');break;
+    case 'fuse-refresh':if(ST.sheet&&ST.sheet.type==='fuse'){
+      var shn=ST.sheet,cur=fusePairs(shn.seen).map(function(p){return pairKey(p.a,p.b)});
+      shn.seen=(shn.seen||[]).concat(cur);
+      if(!fusePairs(shn.seen).length){shn.seen=[];toast('That was all of them. Back to the top matches.')}
+      renderSheet();var shEl=document.querySelector('#sheet .sheet,.sheet');if(shEl)shEl.scrollTop=0}break;
     case 'fuse-open':ST.sheet={type:'fuse'};renderSheet(true);break;
     case 'fuse-pick':d=curDeck();if(d){ST.sheet={type:'fusepick',a:d.id};renderSheet(true)}break;
     case 'fuse-go':ST.sheet={type:'fusename',a:+t.dataset.a,b:+t.dataset.b};ST.sheet.pv=fusePreview(ST.sheet.a,ST.sheet.b);renderSheet(true);break;
