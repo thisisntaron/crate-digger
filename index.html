@@ -997,7 +997,7 @@ function loadBackupText(text){
   var cards=Object.keys(st.owned).length;
   var have=ownedIds().length>0||S.decks.length>0;
   if(have&&!window.confirm('Replace what is on this device ('+ownedIds().length+' cards, '+S.decks.length+' decks) with the backup ('+cards+' cards, '+st.decks.length+' decks)?'))return false;
-  sndStop();ST.open=null;ST.radial=null;ST.rq='';ST.deckId=null;ST.roadId=null;ST.sheet=null;
+  sndStop();ST.open=null;ST.radial=null;ST.rq='';ST.rmood=null;ST.deckId=null;ST.roadId=null;ST.sheet=null;
   S=st;SONGS=S.songs;artCache={};planCache={};
   var made=rowsCache?mergeRows(rowsCache).packs:0;
   save();
@@ -1103,7 +1103,7 @@ function applyRemote(j){
   if(!validState(st)){toast('The cloud save could not be read');return false}
   var u={};st.decks.forEach(function(k){k.ids=k.ids.filter(function(i){if(u[i])return false;u[i]=1;return true})});
   CLOUD.applying=true;
-  sndStop();ST.open=null;ST.radial=null;ST.rq='';ST.deckId=null;ST.roadId=null;ST.sheet=null;
+  sndStop();ST.open=null;ST.radial=null;ST.rq='';ST.rmood=null;ST.deckId=null;ST.roadId=null;ST.sheet=null;
   S=st;SONGS=S.songs;artCache={};planCache={};
   if(rowsCache)mergeRows(rowsCache);
   save();
@@ -1846,7 +1846,7 @@ function nextInQueue(){
 }
 function gotoNext(auto){
   var n=nextInQueue();
-  sndStop();ST.rq='';
+  sndStop();ST.rq='';ST.rmood=null;
   if(n===null){
     toast("That was the last card in the list. You've been through all of them.");
     if(auto){ST.radial=null;renderOverlay();render()}
@@ -1907,7 +1907,7 @@ function newDeck(ids){
   S.decks.push(d);save();return d;
 }
 function finishCard(fate){
-  ST.rq='';
+  ST.rq='';ST.rmood=null;
   if(ST.radial){if(ST.radial.q){gotoNext(true);return}sndStop();ST.radial=null;renderOverlay();render();return}
   var o=ST.open;if(!o||o.phase!=='cards')return;
   o.cards[o.i].fate=fate;sndStop();
@@ -1918,7 +1918,7 @@ function finishCard(fate){
 /* ---------- pack opening ---------- */
 function beginOpen(pid){
   var p=S.packs.find(function(x){return x.id===pid});if(!p)return;
-  ST.rq='';ST.open={pid:pid,pack:{id:p.id,ids:p.ids.slice()},phase:'sealed',cards:[],i:0,flipped:false,busy:false};
+  ST.rq='';ST.rmood=null;ST.open={pid:pid,pack:{id:p.id,ids:p.ids.slice()},phase:'sealed',cards:[],i:0,flipped:false,busy:false};
   renderOverlay();
 }
 function tear(){
@@ -1935,7 +1935,7 @@ function tear(){
   var wait=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches?0:600;
   setTimeout(function(){
     if(ST.open!==o)return;
-    ST.rq='';o.phase='cards';o.i=0;o.flipped=false;o.busy=false;renderOverlay();
+    ST.rq='';ST.rmood=null;o.phase='cards';o.i=0;o.flipped=false;o.busy=false;renderOverlay();
   },wait);
 }
 function flipTap(){
@@ -2177,12 +2177,12 @@ document.addEventListener('click',function(e){
       render();break;
     case 'done':sndStop();ST.open=null;ST.pick=null;renderOverlay();render();break;
     case 'card':
-      ST.rq='';ST.radial={id:sid};
+      ST.rq='';ST.rmood=null;ST.radial={id:sid};
       ST.radial.q=Array.prototype.map.call(document.querySelectorAll('#grid .cardbtn'),function(b){return b.dataset.id});
       ST.radial.u=ST.gf==='unsorted';
       renderOverlay();if(ST.auto)pvStart(sid);break;
     case 'next-song':gotoNext(false);break;
-    case 'close-radial':sndStop();ST.rq='';ST.radial=null;renderOverlay();render();break;
+    case 'close-radial':sndStop();ST.rq='';ST.rmood=null;ST.radial=null;renderOverlay();render();break;
     case 'auto-toggle':toggleAuto();break;
     case 'listen':sndStop();break;
     case 'toggle-play':
@@ -2355,7 +2355,7 @@ document.addEventListener('keydown',function(e){
   if(e.key==='Escape'&&document.getElementById('namepanel')){closeNamePanel();return}
   if(e.key==='Escape'){
     if(ST.sheet){ST.sheet=null;renderSheet()}
-    else if(ST.radial){sndStop();ST.rq='';ST.radial=null;renderOverlay();render()}
+    else if(ST.radial){sndStop();ST.rq='';ST.rmood=null;ST.radial=null;renderOverlay();render()}
     else if(ST.open&&ST.open.phase!=='cards'){sndStop();ST.open=null;renderOverlay();render()}
   }
 });
