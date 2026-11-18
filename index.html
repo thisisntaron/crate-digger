@@ -1338,7 +1338,7 @@ function fuseSheetHtml(){
     var tot=A.ids.filter(function(x){return B.ids.indexOf(x)<0}).length+B.ids.length;
     title='Name the fused deck';
     var pv=sh.pv||(sh.pv=fusePreview(A.id,B.id));
-    body='<p class="sub" style="margin:0 0 10px">'+esc(A.name)+' ('+A.ids.length+') + '+esc(B.name)+' ('+B.ids.length+') = '+tot+' songs.'+(tot>DECK_MAX?' That is over '+DECK_MAX+', so you will get a Split into Pt 1 and Pt 2 button on the Decks screen.':'')+'</p>'
+    body=(sh.prev?'<button class="back" data-act="fuse-back">‹ '+(sh.prev.type==='fuse'?'Back to suggestions':'Back to the list')+'</button>':'')+'<p class="sub" style="margin:0 0 10px">'+esc(A.name)+' ('+A.ids.length+') + '+esc(B.name)+' ('+B.ids.length+') = '+tot+' songs.'+(tot>DECK_MAX?' That is over '+DECK_MAX+', so you will get a Split into Pt 1 and Pt 2 button on the Decks screen.':'')+'</p>'
       +'<div class="fpvwrap">'+fusePvList(A,pv.a)+fusePvList(B,pv.b)+'</div><button class="btn" style="width:100%;margin:0 0 12px" data-act="fuse-shuf">Show other songs</button>'
       +((A.ex||B.ex)?'<p class="syncmsg" style="margin:0 0 10px">One of these was already exported. The fused deck counts as a new deck and is not exported yet, so export it again. The old playlist on YouTube Music stays as it is.</p>':'')
       +'<div class="actions" style="margin:0 0 10px"><button class="btn" data-act="fuse-name-set" data-name="'+esc(A.name)+'">Use "'+esc(A.name)+'"</button><button class="btn" data-act="fuse-name-set" data-name="'+esc(B.name)+'">Use "'+esc(B.name)+'"</button></div>'
@@ -2243,7 +2243,9 @@ document.addEventListener('click',function(e){
       renderSheet();var shEl=document.querySelector('#sheet .sheet,.sheet');if(shEl)shEl.scrollTop=0}break;
     case 'fuse-open':ST.sheet={type:'fuse'};renderSheet(true);break;
     case 'fuse-pick':d=curDeck();if(d){ST.sheet={type:'fusepick',a:d.id};renderSheet(true)}break;
-    case 'fuse-go':ST.sheet={type:'fusename',a:+t.dataset.a,b:+t.dataset.b};ST.sheet.pv=fusePreview(ST.sheet.a,ST.sheet.b);renderSheet(true);break;
+    case 'fuse-back':{var fb=ST.sheet;sndStop();if(fb&&fb.prev){ST.sheet=fb.prev;renderSheet();var fe=document.querySelector('#layer-sheet .sheet');if(fe)fe.scrollTop=fb.prev.scroll||0}else{ST.sheet=null;renderSheet()}break}
+    case 'fuse-go':var fprev=ST.sheet,fe0=document.querySelector('#layer-sheet .sheet');if(fprev&&(fprev.type==='fuse'||fprev.type==='fusepick')){fprev.scroll=fe0?fe0.scrollTop:0}else fprev=null;
+      ST.sheet={type:'fusename',a:+t.dataset.a,b:+t.dataset.b,prev:fprev};ST.sheet.pv=fusePreview(ST.sheet.a,ST.sheet.b);renderSheet(true);break;
     case 'fuse-shuf':if(ST.sheet&&ST.sheet.type==='fusename'){sndStop();var nm0=$('#fuse-name');ST.sheet.pv=fusePreview(ST.sheet.a,ST.sheet.b);ST.sheet.nm=nm0?nm0.value:null;renderSheet()}break;
     case 'fuse-name-set':var fi=$('#fuse-name');if(fi){fi.value=t.dataset.name;fi.focus()}break;
     case 'fuse-confirm':sndStop();
