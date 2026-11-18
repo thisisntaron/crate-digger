@@ -1789,7 +1789,10 @@ function recHead(){
 function ringHtml(id){
   var items=[];
   S.decks.filter(deckOpen).forEach(function(d){items.push({k:'deck',id:d.id,r:moodRank(d),m:moodOf(d),s:((d.name||'')+' '+(moodOf(d)?moodOf(d).n:'')+' '+d.ids.map(function(x){return SONGS[x]?SONGS[x].a:''}).join(' ')).toLowerCase(),label:d.name||'Untitled deck',on:d.ids.indexOf(id)>=0,n:d.ids.length,last:d.ids.slice(-2).reverse().map(function(x){return SONGS[x]?SONGS[x].t:''}).filter(Boolean)})});
-  items=items.map(function(it,i){it.i=i;return it}).sort(function(p,q){return p.r-q.r||p.i-q.i});
+  var sl=(typeof ST.rmood==='number')?ST.rmood:null;
+  /* slider on: the chosen mood's decks come first (right after Recommended), then the nearest moods, untagged last */
+  function dist(it){return sl===null?0:(it.m?Math.abs(it.r-sl):99)}
+  items=items.map(function(it,i){it.i=i;return it}).sort(function(p,q){return dist(p)-dist(q)||p.r-q.r||p.i-q.i});
   var recs=recDecks(id);
   function tile(it,k,cls){
     return '<button class="rit '+it.k+(it.on?' on':'')+(it.m?' mood':'')+(cls||'')+'" data-s="'+esc(it.s)+'" data-act="ring-'+it.k+'"'+(it.k==='deck'?' data-id="'+it.id+'" aria-pressed="'+(it.on?'true':'false')+'"':'')
