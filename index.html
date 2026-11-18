@@ -2110,7 +2110,18 @@ function copyDeck(){
   });
 }
 
-/* press and hold a playlist tile to peek at its songs */
+/* press and hold a playlist tile: play a clip of a random song from it (songs with a real clip first) */
+function holdPlay(did){
+  var d=S.decks.find(function(x){return x.id===did});if(!d)return;
+  var ids=d.ids.filter(function(x){return SONGS[x]});if(!ids.length){toast('That playlist is empty');return}
+  var now=CLIP.playing?CLIP.id:(snd.playing?snd.id:null);
+  var withClip=ids.filter(function(x){return clipUrl(x)}),pool=withClip.length?withClip:ids;
+  var other=pool.filter(function(x){return String(x)!==String(now)});if(other.length)pool=other;
+  var sid=pool[Math.floor(Math.random()*pool.length)];
+  sndStop();if(!clipPlay(sid))sndStart(sid);updatePlayUi();
+  var o=SONGS[sid];toast((o?o.t+' · '+o.a:'Playing')+' ('+(d.name||'Untitled deck')+')');
+}
+/* (the old hold-to-peek sheet is still reachable code-wise but no longer opened from a hold) */
 var LP={t:null,x:0,y:0,sup:false,supT:null};
 function lpClear(){clearTimeout(LP.t);LP.t=null}
 document.addEventListener('pointerdown',function(e){
@@ -2118,7 +2129,7 @@ document.addEventListener('pointerdown',function(e){
   LP.x=e.clientX;LP.y=e.clientY;lpClear();
   LP.t=setTimeout(function(){
     LP.t=null;LP.sup=true;clearTimeout(LP.supT);LP.supT=setTimeout(function(){LP.sup=false},1500);
-    ST.sheet={type:'peek',did:+b.dataset.id};renderSheet(true);
+    holdPlay(+b.dataset.id);
   },420);
 },true);
 document.addEventListener('pointermove',function(e){if(LP.t&&(Math.abs(e.clientX-LP.x)>10||Math.abs(e.clientY-LP.y)>10))lpClear()},true);
