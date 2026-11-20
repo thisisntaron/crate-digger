@@ -1232,9 +1232,9 @@ function renderGrid(){
   }).join(''):'<p class="empty">'+(ST.gf==='unsorted'&&!ST.q?'Everything is sorted into a deck.':'No cards match. Clear the search or pick another filter.')+'</p>';
 }
 function deckRowHtml(d){
-  var tag=d.ex?' · exported':deckFull(d)?' · <span class="rdy">ready to export</span>':' · '+(DECK_MAX-d.ids.length)+' to go';
+  var tag=d.ex?' · exported':deckFull(d)?' · <span class="rdy">full, ready to export</span>':deckReady(d)?' · <span class="rdy">ready to export</span>':' · '+(EXPORT_MIN-d.ids.length)+' to go';
   var mo=moodOf(d);
-  var rd=!d.ex&&deckFull(d);
+  var rd=!d.ex&&deckReady(d);
   var ds=((d.name||'')+' '+d.ids.map(function(i){var x=SONGS[i];return x?x.t+' '+x.a:''}).join(' ')).toLowerCase();
   return '<li data-s="'+esc(ds)+'"><button class="deckrow'+(mo?' mood':'')+(rd?' ready':'')+'"'+(mo?' style="--mh:'+mo.h+'"':'')+' data-act="open-deck" data-id="'+d.id+'"><span class="dn">'+esc(d.name||'Untitled deck')+(mo?' '+moodChip(d):'')+'</span><span class="chev" aria-hidden="true">›</span>'
     +'<span class="dm">'+d.ids.length+(d.ids.length===1?' song':' songs')+rtx(d.ids)+tag+'</span>'+gbar(d.ids)+'</button></li>';
@@ -1283,7 +1283,7 @@ function deckSim(a,b){
   if(gov>=0.3&&top)why.push(Math.round(gov*100)+'% same genre mix ('+top+')');
   return {sc:sc+(total<=DECK_MAX?0.1:0),ok:ok,why:why.join(' · ')||'Similar mix',total:total};
 }
-var FUSE_SKIP=45;
+var FUSE_SKIP=55;
 function pairKey(a,b){return Math.min(a.id,b.id)+'-'+Math.max(a.id,b.id)}
 function fusePairs(skip,all){
   var ds=S.decks.filter(function(d){return !d.ex&&d.ids.length&&d.ids.length<=FUSE_SKIP}),out=[];
@@ -1481,10 +1481,10 @@ function tagSheetHtml(){
 function viewDecks(){
   if(ST.deckId)return viewDeck();
   var act=S.decks.filter(function(d){return !d.ex}),done=S.decks.filter(function(d){return d.ex});
-  act=act.filter(function(d){return deckFull(d)}).concat(act.filter(function(d){return !deckFull(d)}));
+  act=act.filter(function(d){return deckReady(d)}).concat(act.filter(function(d){return !deckReady(d)}));
   return '<div class="row-head"><h2 class="h2">Decks</h2><button class="btn primary" data-act="new-deck">New deck</button></div>'
     +'<input id="dsearch" class="dsearch" type="search" placeholder="Search decks, songs or artists" value="'+esc(ST.dq||'')+'" autocomplete="off" aria-label="Search decks">'
-    +'<p class="sub">Every deck is a playlist of up to '+DECK_MAX+' songs. The bar shows its genre mix. When a deck fills up it is ready to export.</p>'+splitHtml()
+    +'<p class="sub">Every deck is a playlist of up to '+DECK_MAX+' songs. The bar shows its genre mix. From '+EXPORT_MIN+' songs a deck is ready to export, and you can keep adding up to '+DECK_MAX+'.</p>'+splitHtml()
     +(function(){var n=untaggedDecks().length;return n?'<button class="btn" style="width:100%;margin:12px 0 0" data-act="tag-open">Tag moods ('+n+' without one)</button>':''})()
     +(function(){var n=fusePairs().length;return n?'<button class="btn" style="width:100%;margin:12px 0 0" data-act="fuse-open">Fuse similar decks ('+n+(n===1?' pair':' pairs')+')</button>':''})()
     +(act.length?'<ul class="decklist">'+act.map(deckRowHtml).join('')+'</ul>':'<p class="empty" style="margin-top:12px">'+(done.length?'No active decks.':'No decks yet. Make one, then add songs from your cards.')+'</p>')
@@ -1514,10 +1514,10 @@ function viewDeck(){
     +'<div class="moodrow" role="group" aria-label="Mood">'+moodPickerHtml(d.mood,'set-mood')+'</div>'
     +'<p class="sub mono" style="margin:8px 0 10px">'+d.ids.length+(d.ids.length===1?' song':' songs')+rtx(d.ids)+'</p>'
     +gbar(d.ids)+(mix?'<p class="mono" style="margin:6px 0 0">'+esc(mix)+'</p>':'')
-    +(d.ex?'<p class="syncmsg" style="margin:10px 0 0">Exported '+esc(new Date(d.ex).toLocaleDateString())+'. This deck is archived.</p>':deckFull(d)?'<p class="syncmsg rdy" style="margin:10px 0 0">Full at '+DECK_MAX+' songs. Ready to export.</p>':'')
+    +(d.ex?'<p class="syncmsg" style="margin:10px 0 0">Exported '+esc(new Date(d.ex).toLocaleDateString())+'. This deck is archived.</p>':deckFull(d)?'<p class="syncmsg rdy" style="margin:10px 0 0">Full at '+DECK_MAX+' songs. Ready to export.</p>':deckReady(d)?'<p class="syncmsg rdy" style="margin:10px 0 0">Ready to export. Room for '+(DECK_MAX-d.ids.length)+' more.</p>':'')
     +'<div class="actions">'
     +(d.ex?'<button class="btn primary" data-act="reopen">Reopen deck</button>':'<button class="btn primary" data-act="add-songs"'+(deckFull(d)?' disabled':'')+'>Add songs</button>')
-    +'<button class="btn'+(deckFull(d)&&!d.ex?' primary':'')+'" data-act="export"'+(d.ids.length?'':' disabled')+'>Export</button>'
+    +'<button class="btn'+(deckReady(d)&&!d.ex?' primary':'')+'" data-act="export"'+(d.ids.length?'':' disabled')+'>Export</button>'
     +'<button class="btn" data-act="fuse-pick"'+(S.decks.length>1?'':' disabled')+'>Fuse with...</button>'
     +'<button class="btn" data-act="copy"'+(d.ids.length?'':' disabled')+'>Copy as text</button>'
     +'<button class="btn danger" data-act="del">'+(ST.confirmDel?'Tap again to delete':'Delete deck')+'</button></div>'
@@ -1875,9 +1875,10 @@ function junkSong(id){
 function junkIds(){return Object.keys(S.junk||{}).filter(function(id){return SONGS[id]}).sort(function(a,b){return S.junk[b]-S.junk[a]})}
 function leaveOtherDecks(id,keep){S.decks.forEach(function(d){if(d!==keep){var k=d.ids.indexOf(id);if(k>=0)d.ids.splice(k,1)}})}
 function deckOf(id){return S.decks.find(function(d){return d.ids.indexOf(id)>=0})}
-/* A deck holds at most DECK_MAX songs. A full deck is ready to export and leaves the tile grid. Exported decks (d.ex) are archived. */
-var DECK_MAX=50;
+/* A deck holds at most DECK_MAX songs and can be exported from EXPORT_MIN. A full deck leaves the tile grid. Exported decks (d.ex) are archived. */
+var DECK_MAX=60,EXPORT_MIN=30;
 function deckFull(d){return d.ids.length>=DECK_MAX}
+function deckReady(d){return d.ids.length>=EXPORT_MIN}
 function deckOpen(d){return !d.ex&&!deckFull(d)}
 function openNamePanel(cid){
   closeNamePanel();
@@ -2195,7 +2196,7 @@ document.addEventListener('click',function(e){
       if(d&&cid!==null){
         var k=d.ids.indexOf(cid),was=deckOf(cid);
         if(k>=0){d.ids.splice(k,1);toast('Removed from '+d.name)}
-        else{leaveOtherDecks(cid,d);d.ids.push(cid);toast(deckFull(d)?d.name+' is full at '+DECK_MAX+' songs. Ready to export.':(was?'Moved to ':'Added to ')+d.name)}
+        else{leaveOtherDecks(cid,d);d.ids.push(cid);toast(deckFull(d)?d.name+' is full at '+DECK_MAX+' songs. Ready to export.':d.ids.length===EXPORT_MIN?d.name+' is ready to export. You can keep adding.':(was?'Moved to ':'Added to ')+d.name)}
         save();
         if(k<0&&advanceIfQueue())break;
         fillRing(cid,true);render();

@@ -6,7 +6,7 @@ Playlists are created PRIVATE. Open them in YouTube Music and change that if you
 
 Usage (Mac Terminal, or through the launcher):
   python3 yt_playlists.py list           show your decks and which are ready
-  python3 yt_playlists.py                make playlists for decks that are full (50 songs) and not exported
+  python3 yt_playlists.py                make playlists for decks that are ready (30 or more songs) and not exported
   add --min 20 to include every deck with at least 20 songs instead of only full ones
   python3 yt_playlists.py all            every deck that is not exported
   python3 yt_playlists.py "chill"        decks whose name contains "chill"
@@ -32,7 +32,7 @@ AUTH = os.path.join(TOOLS, "ytm-auth.json")
 HEADERS_TXT = os.path.join(HOME, "Downloads", "ytm-headers.txt")
 MADE = os.path.join(TOOLS, "yt-created.json")
 MAP_URL = "https://thisisntaron.github.io/crate-digger/ytmap.json"
-DECK_MAX = 50
+DECK_MAX = 30
 
 
 def boot():
