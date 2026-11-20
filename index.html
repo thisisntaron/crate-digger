@@ -1267,7 +1267,7 @@ function genreShare(d){
   Object.keys(m).forEach(function(g){m[g]/=d.ids.length});return m;
 }
 /* Decks whose moods sit far apart on the energy scale are not suggested for fusing. Untagged decks are not blocked. */
-var FUSE_MOOD_GAP=2;
+var FUSE_MOOD_GAP=1;
 function moodGap(a,b){return (moodOf(a)&&moodOf(b))?Math.abs(moodRank(a)-moodRank(b)):0}
 /* Similarity of two decks: shared artists (weighted most) plus how much their genre mixes overlap. */
 function deckSim(a,b){
@@ -1281,7 +1281,8 @@ function deckSim(a,b){
   var why=[];
   if(shared.length)why.push('Shares '+shared.slice(0,3).join(', ')+(shared.length>3?' +'+(shared.length-3):''));
   if(gov>=0.3&&top)why.push(Math.round(gov*100)+'% same genre mix ('+top+')');
-  return {sc:sc+(total<=DECK_MAX?0.1:0),ok:ok,why:why.join(' · ')||'Similar mix',total:total};
+  var mg=moodGap(a,b),mb=(moodOf(a)&&moodOf(b))?(mg===0?0.15:0.05):0;
+  return {sc:sc+(total<=DECK_MAX?0.1:0)+mb,ok:ok,why:why.join(' · ')||'Similar mix',total:total};
 }
 var FUSE_SKIP=55;
 function pairKey(a,b){return Math.min(a.id,b.id)+'-'+Math.max(a.id,b.id)}
