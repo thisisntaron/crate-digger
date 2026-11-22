@@ -508,7 +508,7 @@ function spotTick(){
 /* Exact YouTube Music video ids for Spotify songs (ytmap.json: {spotifyId:[videoId,score]}), made by tools/yt_match.py. */
 var YTMAP={};
 function loadYtMap(){
-  try{fetch('ytmap.json').then(function(r){return r.ok?r.json():null}).then(function(j){if(j){YTMAP=j;if(ST.tab==='listen')render()}}).catch(function(){})}catch(e){}
+  try{fetch('ytmap.json').then(function(r){return r.ok?r.json():null}).then(function(j){if(j){YTMAP=j;artCache={};softRender()}}).catch(function(){})}catch(e){}
 }
 function ytId(id){return String(id).length===11?String(id):(YTMAP[id]&&YTMAP[id][0])||''}
 function loadSpot(){
@@ -523,8 +523,11 @@ function loadSpot(){
 }
 /* Album art and tempo come from art.json, published next to the page. Nothing in it means the drawn sleeves are used. */
 var ARTJ={},ARTURL={};
+/* Spotify songs Apple doesn't carry borrow the cover from their YouTube Music match (a 4:3 thumbnail with the square cover in the middle). */
+function ytThumb(id){var m=SPX[id]&&!SPX[id].u&&YTMAP[id];return m?'https://i.ytimg.com/vi/'+m[0]+'/hqdefault.jpg':null}
 function artUrl(id){
   if(SPX[id]&&SPX[id].u)return SPX[id].u;
+  if(ytThumb(id))return ytThumb(id);
   var e=ARTJ[id];if(!e||!e.a)return null;
   if(ARTURL[id]===undefined){
     try{var bin=atob(e.a),n=bin.length,u=new Uint8Array(n);for(var i=0;i<n;i++)u[i]=bin.charCodeAt(i);ARTURL[id]=URL.createObjectURL(new Blob([u],{type:'image/jpeg'}))}
@@ -595,7 +598,7 @@ function art(id,extra){
         +'<circle cx="70" cy="50" r="33" fill="#0a0d0f"/>'
         +'<circle cx="70" cy="50" r="28" '+gl+'/><circle cx="70" cy="50" r="23" '+gl+'/><circle cx="70" cy="50" r="18" '+gl+'/>'
         +'<circle cx="70" cy="50" r="10" fill="'+lab+'"/><circle cx="70" cy="50" r="1.8" fill="#0a0d0f"/>'
-        +(ARTJ[id]&&ARTJ[id].s==='yt'
+        +((ARTJ[id]&&ARTJ[id].s==='yt')||ytThumb(id)
           /* YouTube thumbnails are 4:3 with the cover square in the middle (105,45 and 270 wide on a 480 x 360 frame) */
           ?'<svg x="6" y="17" width="66" height="66" viewBox="0 0 66 66"><image href="'+au+'" x="-25.7" y="-11" width="117.3" height="88"/></svg>'
           :'<image href="'+au+'" x="6" y="17" width="66" height="66" preserveAspectRatio="xMidYMid slice"/>')
