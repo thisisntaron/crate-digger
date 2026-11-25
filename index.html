@@ -1251,8 +1251,8 @@ function splitHtml(){
     +'<button class="btn '+(ST.confirmSplit?'danger':'primary')+'" data-act="split-decks">'+(ST.confirmSplit?'Tap again to split '+n+(n===1?' deck':' decks'):'Split by artist into even parts')+'</button></div>';
 }
 /* Split a big deck into balanced parts of at most DECK_MAX, keeping each artist's songs together (only an artist with more than DECK_MAX songs is ever divided). */
-function splitByArtist(ids){
-  var k=Math.ceil(ids.length/DECK_MAX),groups={},order=[];
+function splitByArtist(ids,kk){
+  var k=Math.max(kk||2,Math.ceil(ids.length/DECK_MAX)),groups={},order=[];
   ids.forEach(function(id,i){
     var o=SONGS[id],a=o?String(o.a||'').split(/\s*(?:,|&|\+|\bfeat\.?|\bft\.?|\bwith\b|\bx\b)\s*/i)[0].trim().toLowerCase():'';
     var key=a||('#'+id);
@@ -1274,9 +1274,17 @@ function splitDecks(){
   bigDecks().forEach(function(d){
     var base=(d.name||'Deck').replace(/\s+Pt \d+$/,''),i=S.decks.indexOf(d),parts=splitByArtist(d.ids);
     d.ids=parts[0];d.name=base+' Pt 1';delete d.ex;n++;
-    for(var part=1;part<parts.length;part++){made++;S.decks.splice(i+part,0,{id:S.nid++,name:base+' Pt '+(part+1),ids:parts[part]})}
+    for(var part=1;part<parts.length;part++){made++;S.decks.splice(i+part,0,{id:S.nid++,name:base+' Pt '+(part+1),ids:parts[part],mood:d.mood})}
   });
   save();return {n:n,made:made};
+}
+
+function splitOne(d){
+  var base=(d.name||'Deck').replace(/\s+Pt \d+$/,''),i=S.decks.indexOf(d),parts=splitByArtist(d.ids);
+  if(parts.length<2)return 0;
+  d.ids=parts[0];d.name=base+' Pt 1';delete d.ex;
+  for(var p=1;p<parts.length;p++)S.decks.splice(i+p,0,{id:S.nid++,name:base+' Pt '+(p+1),ids:parts[p],mood:d.mood});
+  save();return parts.length;
 }
 
 /* ---------- fuse decks ---------- */
@@ -1544,6 +1552,7 @@ function viewDeck(){
     +(d.ex?'<button class="btn primary" data-act="reopen">Reopen deck</button>':'<button class="btn primary" data-act="add-songs"'+(deckFull(d)?' disabled':'')+'>Add songs</button>')
     +'<button class="btn'+(deckReady(d)&&!d.ex?' primary':'')+'" data-act="export"'+(d.ids.length?'':' disabled')+'>Export</button>'
     +'<button class="btn" data-act="fuse-pick"'+(S.decks.length>1?'':' disabled')+'>Fuse with...</button>'
+    +(!d.ex&&d.ids.length>=EXPORT_MIN?'<button class="btn" data-act="split-one">'+(ST.confirmSplitOne===d.id?'Tap again to split in two':'Split by artist')+'</button>':'')
     +'<button class="btn" data-act="copy"'+(d.ids.length?'':' disabled')+'>Copy as text</button>'
     +'<button class="btn danger" data-act="del">'+(ST.confirmDel?'Tap again to delete':'Delete deck')+'</button></div>'
     +'<textarea id="export" class="export" readonly hidden rows="8" aria-label="Playlist text"></textarea>'
@@ -2262,6 +2271,9 @@ document.addEventListener('click',function(e){
       d=newDeck();ST.deckId=d.id;ST.confirmDel=false;render();window.scrollTo(0,0);
       var inp=$('#deck-name');if(inp){inp.focus();inp.select()}
       break;
+    case 'split-one':d=curDeck();if(d){
+      if(ST.confirmSplitOne!==d.id){ST.confirmSplitOne=d.id;render();break}
+      ST.confirmSplitOne=null;var np=splitOne(d);ST.deckId=null;render();window.scrollTo(0,0);toast('Split into '+np+' parts, each artist kept together.')}break;
     case 'split-decks':
       if(!ST.confirmSplit){ST.confirmSplit=true;render();break}
       ST.confirmSplit=false;var r=splitDecks();render();toast('Split '+r.n+(r.n===1?' deck':' decks')+' into '+(r.n+r.made)+' parts. Ready to export.');break;
@@ -2282,8 +2294,8 @@ document.addEventListener('click',function(e){
       ST.sheet=null;renderSheet();
       if(fa){ST.deckId=null;ST.roadId=null;ST.tab='decks';render();toast('Fused into '+fa.name+' ('+fa.ids.length+' songs)'+(fa.ids.length>DECK_MAX?'. Use Split to make it exportable.':''))}
       break;
-    case 'open-deck':ST.deckId=id;ST.confirmDel=false;render();window.scrollTo(0,0);break;
-    case 'back-decks':sndStop();ST.deckId=null;ST.roadId=null;ST.confirmDel=false;ST.confirmRoadDel=false;render();break;
+    case 'open-deck':ST.deckId=id;ST.confirmDel=false;ST.confirmSplitOne=null;render();window.scrollTo(0,0);break;
+    case 'back-decks':sndStop();ST.confirmSplitOne=null;ST.deckId=null;ST.roadId=null;ST.confirmDel=false;ST.confirmRoadDel=false;render();break;
     case 'add-songs':ST.sheet={type:'add'};ST.addq='';renderSheet(true);break;
     case 'close-sheet':if(ST.sheet&&(ST.sheet.type==='peek'||ST.sheet.type==='move'||ST.sheet.type==='tag'||ST.sheet.type==='fusename'))sndStop();var wasTag=ST.sheet&&ST.sheet.type==='tag';ST.sheet=null;renderSheet();if(wasTag)render();break;
     case 'road-open':ST.sheet={type:'road',step:'setup',hours:4,moods:{},ex:true,order:'up'};renderSheet(true);break;
