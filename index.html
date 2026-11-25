@@ -1247,15 +1247,34 @@ function deckRowHtml(d){
 function bigDecks(){return S.decks.filter(function(d){return d.ids.length>DECK_MAX})}
 function splitHtml(){
   var n=bigDecks().length;if(!n)return '';
-  return '<div class="splitbox"><p class="syncmsg" style="margin:0 0 8px">'+n+(n===1?' deck has':' decks have')+' more than '+DECK_MAX+' songs. Split '+(n===1?'it':'them')+' into Pt 1 and Pt 2 so '+(n===1?'it can':'they can')+' be exported again?</p>'
-    +'<button class="btn '+(ST.confirmSplit?'danger':'primary')+'" data-act="split-decks">'+(ST.confirmSplit?'Tap again to split '+n+(n===1?' deck':' decks'):'Split into Pt 1 and Pt 2')+'</button></div>';
+  return '<div class="splitbox"><p class="syncmsg" style="margin:0 0 8px">'+n+(n===1?' deck has':' decks have')+' more than '+DECK_MAX+' songs. Split '+(n===1?'it':'them')+' into even parts (Pt 1, Pt 2 and so on), keeping each artist together, so '+(n===1?'it can':'they can')+' be exported again?</p>'
+    +'<button class="btn '+(ST.confirmSplit?'danger':'primary')+'" data-act="split-decks">'+(ST.confirmSplit?'Tap again to split '+n+(n===1?' deck':' decks'):'Split by artist into even parts')+'</button></div>';
+}
+/* Split a big deck into balanced parts of at most DECK_MAX, keeping each artist's songs together (only an artist with more than DECK_MAX songs is ever divided). */
+function splitByArtist(ids){
+  var k=Math.ceil(ids.length/DECK_MAX),groups={},order=[];
+  ids.forEach(function(id,i){
+    var o=SONGS[id],a=o?String(o.a||'').split(/\s*(?:,|&|\+|\bfeat\.?|\bft\.?|\bwith\b|\bx\b)\s*/i)[0].trim().toLowerCase():'';
+    var key=a||('#'+id);
+    if(!groups[key]){groups[key]=[];order.push(key)}
+    groups[key].push(i);
+  });
+  var gl=order.map(function(key,n){return {idx:groups[key],n:n}}).sort(function(x,y){return y.idx.length-x.idx.length||x.n-y.n});
+  var parts=[];for(var p=0;p<k;p++)parts.push([]);
+  function lightest(room){var best=-1;for(var q=0;q<k;q++){if(parts[q].length+room<=DECK_MAX&&(best<0||parts[q].length<parts[best].length))best=q}return best}
+  gl.forEach(function(g){
+    var q=lightest(g.idx.length);
+    if(q>=0){parts[q]=parts[q].concat(g.idx);return}
+    g.idx.forEach(function(i){var r=lightest(1);if(r<0)r=0;parts[r].push(i)});
+  });
+  return parts.map(function(p){return p.sort(function(x,y){return x-y}).map(function(i){return ids[i]})}).filter(function(p){return p.length});
 }
 function splitDecks(){
   var made=0,n=0;
   bigDecks().forEach(function(d){
-    var base=(d.name||'Deck').replace(/\s+Pt \d+$/,''),all=d.ids.slice(),i=S.decks.indexOf(d),part=1;
-    d.ids=all.splice(0,DECK_MAX);d.name=base+' Pt 1';delete d.ex;n++;
-    while(all.length){part++;made++;S.decks.splice(i+part-1,0,{id:S.nid++,name:base+' Pt '+part,ids:all.splice(0,DECK_MAX)})}
+    var base=(d.name||'Deck').replace(/\s+Pt \d+$/,''),i=S.decks.indexOf(d),parts=splitByArtist(d.ids);
+    d.ids=parts[0];d.name=base+' Pt 1';delete d.ex;n++;
+    for(var part=1;part<parts.length;part++){made++;S.decks.splice(i+part,0,{id:S.nid++,name:base+' Pt '+(part+1),ids:parts[part]})}
   });
   save();return {n:n,made:made};
 }
