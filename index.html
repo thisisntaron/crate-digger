@@ -1617,8 +1617,8 @@ function ytSplit(d){
   d.ids.forEach(function(id){var v=ytId(id);if(v)ok.push(v);else if(SONGS[id])miss.push(SONGS[id])});
   return {ok:ok,miss:miss};
 }
-/* Where queues open: YouTube Music (default) or regular YouTube. Kept outside the saved deck state. */
-function openerMusic(){try{return localStorage.getItem('crate-opener')!=='yt'}catch(e){return true}}
+/* Where queues open: regular YouTube (default, YouTube Music's app ignores temporary queues) or YouTube Music. Kept outside the saved deck state. */
+function openerMusic(){try{return localStorage.getItem('crate-opener')==='music'}catch(e){return false}}
 function qUrl(ids){return 'https://'+(openerMusic()?'music':'www')+'.youtube.com/watch_videos?video_ids='+ids.join(',')}
 function ytUrl(d){return qUrl(ytSplit(d).ok)}
 function exportName(d){return (String(d.name||'playlist').replace(/[^A-Za-z0-9 _-]+/g,'').trim()||'playlist')+'.csv'}
@@ -1885,7 +1885,7 @@ function junkIds(){return Object.keys(S.junk||{}).filter(function(id){return SON
 function leaveOtherDecks(id,keep){S.decks.forEach(function(d){if(d!==keep){var k=d.ids.indexOf(id);if(k>=0)d.ids.splice(k,1)}})}
 function deckOf(id){return S.decks.find(function(d){return d.ids.indexOf(id)>=0})}
 /* A deck holds at most DECK_MAX songs and can be exported from EXPORT_MIN. A full deck leaves the tile grid. Exported decks (d.ex) are archived. */
-var DECK_MAX=60,EXPORT_MIN=30;
+var DECK_MAX=50,EXPORT_MIN=30;
 function deckFull(d){return d.ids.length>=DECK_MAX}
 function deckReady(d){return d.ids.length>=EXPORT_MIN}
 function deckOpen(d){return !d.ex&&!deckFull(d)}
