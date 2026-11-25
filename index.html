@@ -1556,7 +1556,7 @@ function viewListen(){
     var n=listenDecks(m.k).length;
     return '<button class="ltile'+(ST.lmood===m.k?' on':'')+'" style="--mh:'+m.h+'" data-act="l-mood" data-mood="'+m.k+'"'+(n?'':' disabled')+'><b>'+m.n+'</b><span>'+n+(n===1?' playlist':' playlists')+'</span></button>';
   }).join('');
-  var out='<div class="row-head"><h2 class="h2">Listen</h2></div><p class="lhint">Pick a mood and I will offer a few playlists. Play opens YouTube with the songs already shuffled.</p><div class="lgrid">'+tiles+'</div>';
+  var out='<div class="row-head"><h2 class="h2">Listen</h2></div><p class="lhint">Pick a mood and I will offer a few playlists. Play opens the songs already shuffled.</p><p class="lhint">Open in: <button class="btn" data-act="l-opener">'+(openerMusic()?'YouTube Music':'YouTube')+'</button> (tap to switch)</p><div class="lgrid">'+tiles+'</div>';
   if(ST.lmood){
     var ds=(ST.lpick||[]).map(function(id){return S.decks.find(function(d){return d.id===id})}).filter(Boolean);
     if(!ds.length)out+='<p class="empty">No playlists with this mood have '+LISTEN_MIN+' playable songs yet.</p>';
@@ -1617,7 +1617,10 @@ function ytSplit(d){
   d.ids.forEach(function(id){var v=ytId(id);if(v)ok.push(v);else if(SONGS[id])miss.push(SONGS[id])});
   return {ok:ok,miss:miss};
 }
-function ytUrl(d){return 'https://www.youtube.com/watch_videos?video_ids='+ytSplit(d).ok.join(',')}
+/* Where queues open: YouTube Music (default) or regular YouTube. Kept outside the saved deck state. */
+function openerMusic(){try{return localStorage.getItem('crate-opener')!=='yt'}catch(e){return true}}
+function qUrl(ids){return 'https://'+(openerMusic()?'music':'www')+'.youtube.com/watch_videos?video_ids='+ids.join(',')}
+function ytUrl(d){return qUrl(ytSplit(d).ok)}
 function exportName(d){return (String(d.name||'playlist').replace(/[^A-Za-z0-9 _-]+/g,'').trim()||'playlist')+'.csv'}
 function exportSheetHtml(){
   var d=curDeck();if(!d)return '';
@@ -2283,7 +2286,7 @@ document.addEventListener('click',function(e){
       if(!ST.confirmRoadDel){ST.confirmRoadDel=true;render();break}
       S.roads=roads().filter(function(x){return x.id!==ST.roadId});ST.roadId=null;ST.confirmRoadDel=false;save();render();toast('Roadtrip deleted');break;
     case 'road-csv':{var r4=curRoad();if(r4)shareCsv(deckCsv({ids:roadIds(r4)}),(String(r4.name).replace(/[^A-Za-z0-9 _-]+/g,'').trim()||'roadtrip')+'.csv')}break;
-    case 'road-yt':{var r5=curRoad();if(r5){var pt=roadParts(r5).parts[+t.dataset.i];if(pt)window.open('https://www.youtube.com/watch_videos?video_ids='+pt.join(','),'_blank','noopener')}break}
+    case 'road-yt':{var r5=curRoad();if(r5){var pt=roadParts(r5).parts[+t.dataset.i];if(pt)window.open(qUrl(pt),'_blank','noopener')}break}
     case 'tag-open':ST.sheet={type:'tag',q:untaggedDecks().map(function(x){return x.id}),i:0,n:0};renderSheet(true);break;
     case 'tag-mood':{sndStop();var tq=ST.sheet,td=S.decks.find(function(x){return x.id===tq.q[tq.i]});if(td){td.mood=t.dataset.mood;save();tq.n++}tq.i++;renderSheet();break}
     case 'tag-skip':sndStop();ST.sheet.i++;renderSheet();break;
@@ -2321,7 +2324,8 @@ document.addEventListener('click',function(e){
     case 'l-mood':ST.lmood=t.dataset.mood;ST.lseen=[];listenPick();render();var lp=document.querySelector('.lpicks');if(lp)lp.scrollIntoView({block:'nearest',behavior:'smooth'});break;
     case 'rm-off':{ST.rmood=null;var rc2=curCardId();if(rc2)fillRing(rc2,false);break}
     case 'l-more':listenPick();render();break;
-    case 'l-play':{d=S.decks.find(function(x){return x.id===id});if(d){var ids=shuffleArr(ytSplit(d).ok).slice(0,50);if(ids.length)window.open('https://www.youtube.com/watch_videos?video_ids='+ids.join(','),'_blank','noopener')}break}
+    case 'l-opener':try{localStorage.setItem('crate-opener',openerMusic()?'yt':'music')}catch(e){}render();break;
+    case 'l-play':{d=S.decks.find(function(x){return x.id===id});if(d){var ids=shuffleArr(ytSplit(d).ok).slice(0,50);if(ids.length)window.open(qUrl(ids),'_blank','noopener')}break}
     case 'yt-playlist':{d=curDeck();if(d&&ytSplit(d).ok.length)window.open(ytUrl(d),'_blank','noopener');break}
     case 'export-csv':exportCsv();break;
     case 'copy-sheet':{d=curDeck();if(d){var tx=deckText(d);try{navigator.clipboard.writeText(tx).then(function(){toast('Playlist text copied')},function(){toast('Could not copy')})}catch(e2){toast('Could not copy')}}break}
