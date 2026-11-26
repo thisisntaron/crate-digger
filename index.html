@@ -1567,7 +1567,16 @@ function shuffleArr(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floo
 function listenPick(){
   var pool=listenDecks(ST.lmood),seen=ST.lseen||[];
   var fresh=pool.filter(function(d){return seen.indexOf(d.id)<0}),rest=pool.filter(function(d){return seen.indexOf(d.id)>=0});
-  var pick=shuffleArr(fresh).concat(shuffleArr(rest)).slice(0,3).map(function(d){return d.id});
+  var pick;
+  if(ST.lmood==='any'){
+    /* Any mood: three decks from three different moods (unmooded decks count as one group), fresh decks first. */
+    var groups={},keys=[];
+    shuffleArr(fresh).concat(shuffleArr(rest)).forEach(function(d){var k=d.mood||'';if(!groups[k]){groups[k]=[];keys.push(k)}groups[k].push(d)});
+    keys=shuffleArr(keys).sort(function(x,y){return (seen.indexOf(groups[x][0].id)<0?0:1)-(seen.indexOf(groups[y][0].id)<0?0:1)});
+    var chosen=keys.slice(0,3).map(function(k){return groups[k][0]});
+    if(chosen.length<3){var left=shuffleArr(fresh).concat(shuffleArr(rest)).filter(function(d){return chosen.indexOf(d)<0});chosen=chosen.concat(left.slice(0,3-chosen.length))}
+    pick=shuffleArr(chosen).map(function(d){return d.id});
+  }else pick=shuffleArr(fresh).concat(shuffleArr(rest)).slice(0,3).map(function(d){return d.id});
   ST.lpick=pick;ST.lseen=fresh.length>=3?seen.concat(pick):pick;
 }
 function listenCard(d){
