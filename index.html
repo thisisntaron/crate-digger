@@ -1270,21 +1270,21 @@ function splitByArtist(ids,kk){
   return parts.map(function(p){return p.sort(function(x,y){return x-y}).map(function(i){return ids[i]})}).filter(function(p){return p.length});
 }
 function splitDecks(){
-  var made=0,n=0;
+  var made=0,n=0,all=[];
   bigDecks().forEach(function(d){
     var base=(d.name||'Deck').replace(/\s+Pt \d+$/,''),i=S.decks.indexOf(d),parts=splitByArtist(d.ids);
-    d.ids=parts[0];d.name=base+' Pt 1';delete d.ex;n++;
-    for(var part=1;part<parts.length;part++){made++;S.decks.splice(i+part,0,{id:S.nid++,name:base+' Pt '+(part+1),ids:parts[part],mood:d.mood})}
+    d.ids=parts[0];d.name=base+' Pt 1';delete d.ex;n++;all.push(d.id);
+    for(var part=1;part<parts.length;part++){made++;var nd={id:S.nid++,name:base+' Pt '+(part+1),ids:parts[part],mood:d.mood};all.push(nd.id);S.decks.splice(i+part,0,nd)}
   });
-  save();return {n:n,made:made};
+  save();return {n:n,made:made,ids:all};
 }
 
 function splitOne(d){
   var base=(d.name||'Deck').replace(/\s+Pt \d+$/,''),i=S.decks.indexOf(d),parts=splitByArtist(d.ids);
-  if(parts.length<2)return 0;
-  d.ids=parts[0];d.name=base+' Pt 1';delete d.ex;
-  for(var p=1;p<parts.length;p++)S.decks.splice(i+p,0,{id:S.nid++,name:base+' Pt '+(p+1),ids:parts[p],mood:d.mood});
-  save();return parts.length;
+  if(parts.length<2)return [];
+  d.ids=parts[0];d.name=base+' Pt 1';delete d.ex;var out=[d.id];
+  for(var p=1;p<parts.length;p++){var nd={id:S.nid++,name:base+' Pt '+(p+1),ids:parts[p],mood:d.mood};out.push(nd.id);S.decks.splice(i+p,0,nd)}
+  save();return out;
 }
 
 /* ---------- fuse decks ---------- */
@@ -1740,6 +1740,24 @@ function peekSheetHtml(){
     +(cid!==null?'<button class="btn '+(inIt?'':'primary')+'" style="width:100%;margin-top:14px" data-act="peek-add" data-id="'+d.id+'"'+(!inIt&&!deckOpen(d)?' disabled':'')+'>'+(inIt?'Remove current song from here':'Add current song here')+'</button>':'')
     +'</div>';
 }
+/* After a split: name each new part and see which artists make it up. */
+function topArtists(ids,max){
+  var m={},ord=[];
+  ids.forEach(function(id){var o=SONGS[id];if(!o)return;var a=String(o.a||'').split(/\s*(?:,|&|\+|\bfeat\.?|\bft\.?|\bwith\b|\bx\b)\s*/i)[0].trim(),k=a.toLowerCase();if(!k)return;if(!m[k]){m[k]={a:a,n:0,f:ord.length};ord.push(k)}m[k].n++});
+  var list=ord.map(function(k){return m[k]}).sort(function(x,y){return y.n-x.n||x.f-y.f});
+  return {top:list.slice(0,max),more:Math.max(0,list.length-max),total:list.length};
+}
+function splitNameSheetHtml(){
+  var sh=ST.sheet,decks=(sh.ids||[]).map(function(id){return S.decks.find(function(d){return d.id===id})}).filter(Boolean);
+  var body=decks.map(function(d){
+    var t=topArtists(d.ids,6);
+    return '<div class="splitpart"><input class="deckname" data-sid="'+d.id+'" type="text" maxlength="40" value="'+esc(d.name)+'" aria-label="Name for this playlist" autocomplete="off">'
+      +'<p class="mono" style="margin:4px 0 2px">'+d.ids.length+' songs, '+t.total+(t.total===1?' artist':' artists')+'</p>'
+      +'<p class="sub" style="margin:0 0 14px">'+t.top.map(function(x){return esc(x.a)+(x.n>1?' ('+x.n+')':'')}).join(', ')+(t.more?' and '+t.more+' more':'')+'</p></div>'}).join('');
+  return '<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet" role="dialog" aria-label="Name the new playlists">'
+    +'<div class="sheet-head"><h3 class="h3">Name the new '+(decks.length===1?'playlist':'playlists')+'</h3><button class="btn primary" data-act="close-sheet">Done</button></div>'
+    +'<p class="sub" style="margin:0 0 12px">Each artist stayed together. Pick names that fit the biggest artists, or tap Done to keep these.</p>'+body+'</div>';
+}
 function renderSheet(anim){
   var el=$('#layer-sheet');
   lock();
@@ -1751,6 +1769,7 @@ function renderSheet(anim){
   if(ST.sheet.type==='road'){el.innerHTML=roadSheetHtml();if(anim){var shr=$('.sheet',el);if(shr)shr.classList.add('enter')}return}
   if(/^tag$/.test(ST.sheet.type)){el.innerHTML=tagSheetHtml();if(anim){var sht=$('.sheet',el);if(sht)sht.classList.add('enter')}return}
   if(/^fuse/.test(ST.sheet.type)){el.innerHTML=fuseSheetHtml();if(anim){var shf=$('.sheet',el);if(shf)shf.classList.add('enter')}return}
+  if(ST.sheet.type==='splitname'){el.innerHTML=splitNameSheetHtml();if(anim){var shs=$('.sheet',el);if(shs)shs.classList.add('enter')}return}
   if(ST.sheet.type==='export'){el.innerHTML=exportSheetHtml();if(anim){var sh0=$('.sheet',el);if(sh0)sh0.classList.add('enter')}return}
   el.innerHTML='<div class="sheet-bg" data-act="close-sheet"></div><div class="sheet tall" role="dialog" aria-label="Add songs">'
     +'<div class="sheet-head"><h3 class="h3">Add songs</h3><button class="btn" data-act="close-sheet">Done</button></div>'
@@ -2273,10 +2292,10 @@ document.addEventListener('click',function(e){
       break;
     case 'split-one':d=curDeck();if(d){
       if(ST.confirmSplitOne!==d.id){ST.confirmSplitOne=d.id;render();break}
-      ST.confirmSplitOne=null;var np=splitOne(d);ST.deckId=null;render();window.scrollTo(0,0);toast('Split into '+np+' parts, each artist kept together.')}break;
+      ST.confirmSplitOne=null;var np=splitOne(d);ST.deckId=null;render();window.scrollTo(0,0);if(np.length){ST.sheet={type:'splitname',ids:np};renderSheet(true)}}break;
     case 'split-decks':
       if(!ST.confirmSplit){ST.confirmSplit=true;render();break}
-      ST.confirmSplit=false;var r=splitDecks();render();toast('Split '+r.n+(r.n===1?' deck':' decks')+' into '+(r.n+r.made)+' parts. Ready to export.');break;
+      ST.confirmSplit=false;var r=splitDecks();render();if(r.ids.length){ST.sheet={type:'splitname',ids:r.ids};renderSheet(true)}break;
     case 'fuse-refresh':if(ST.sheet&&ST.sheet.type==='fuse'){
       var shn=ST.sheet,cur=fusePairs(shn.seen).map(function(p){return pairKey(p.a,p.b)});
       shn.seen=(shn.seen||[]).concat(cur);
@@ -2297,7 +2316,7 @@ document.addEventListener('click',function(e){
     case 'open-deck':ST.deckId=id;ST.confirmDel=false;ST.confirmSplitOne=null;render();window.scrollTo(0,0);break;
     case 'back-decks':sndStop();ST.confirmSplitOne=null;ST.deckId=null;ST.roadId=null;ST.confirmDel=false;ST.confirmRoadDel=false;render();break;
     case 'add-songs':ST.sheet={type:'add'};ST.addq='';renderSheet(true);break;
-    case 'close-sheet':if(ST.sheet&&(ST.sheet.type==='peek'||ST.sheet.type==='move'||ST.sheet.type==='tag'||ST.sheet.type==='fusename'))sndStop();var wasTag=ST.sheet&&ST.sheet.type==='tag';ST.sheet=null;renderSheet();if(wasTag)render();break;
+    case 'close-sheet':if(ST.sheet&&(ST.sheet.type==='peek'||ST.sheet.type==='move'||ST.sheet.type==='tag'||ST.sheet.type==='fusename'))sndStop();var wasTag=ST.sheet&&(ST.sheet.type==='tag'||ST.sheet.type==='splitname');ST.sheet=null;renderSheet();if(wasTag)render();break;
     case 'road-open':ST.sheet={type:'road',step:'setup',hours:4,moods:{},ex:true,order:'up'};renderSheet(true);break;
     case 'road-hours':ST.sheet.hours=+t.dataset.h;renderSheet();break;
     case 'road-mood':{var rm=ST.sheet.moods;if(rm[t.dataset.m])delete rm[t.dataset.m];else rm[t.dataset.m]=1;renderSheet();break}
@@ -2384,6 +2403,7 @@ document.addEventListener('input',function(e){
   else if(id==='rmood'){ST.rmood=+e.target.value;var mm=recMoodAt(ST.rmood),hd=e.target.closest('.rechead'),lb=$('#rmlab');e.target.classList.add('on');if(hd){hd.style.setProperty('--mh',mm.h);var w=hd.querySelector('.rmw');if(w)w.classList.add('on')}if(lb)lb.textContent=mm.n}
   else if(id==='road-rename'){var rr=curRoad();if(rr){rr.name=e.target.value.slice(0,40);save()}}
   else if(id==='deck-name'){var d=curDeck();if(d){d.name=e.target.value.slice(0,40);save()}}
+  else if(e.target.dataset&&e.target.dataset.sid){var sd=S.decks.find(function(x){return x.id===+e.target.dataset.sid});if(sd){sd.name=e.target.value.slice(0,40);save()}}
 });
 document.addEventListener('change',function(e){
   if(e.target.id==='sort'){ST.sort=e.target.value;renderGrid()}
