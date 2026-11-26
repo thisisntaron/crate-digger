@@ -1695,15 +1695,17 @@ function dlText(text,name){
 function addRows(){
   var d=curDeck();if(!d)return '';
   var q=ST.addq.trim().toLowerCase();
+  /* Unsorted cards first, then cards sitting in other (not archived) decks: picking one moves it here. */
   var ids=ownedIds().filter(function(id){
-    if(deckOf(id))return false;
+    var od=deckOf(id);
+    if(od&&(od===d||od.ex))return false;
     if(!q)return true;
-    var s=SONGS[id];return (s.t+' '+s.a+' '+s.g).toLowerCase().indexOf(q)>=0;
-  }).sort(function(a,b){return S.owned[b].n-S.owned[a].n});
-  if(!ids.length)return '<li class="empty">'+(q?'No unused cards match.':'Every card you own is already in this deck.')+'</li>';
+    var s=SONGS[id];return (s.t+' '+s.a+' '+s.g+' '+(od?od.name:'')).toLowerCase().indexOf(q)>=0;
+  }).sort(function(a,b){var ia=deckOf(a)?1:0,ib=deckOf(b)?1:0;return ia-ib||S.owned[b].n-S.owned[a].n});
+  if(!ids.length)return '<li class="empty">'+(q?'No cards match.':'Every card you own is already in this deck.')+'</li>';
   return ids.map(function(id){
-    var s=SONGS[id];
-    return '<li class="arow">'+thumb(id)+'<span class="tt"><b>'+esc(s.t)+'</b><span>'+esc(s.a)+' · '+esc(s.g)+'</span></span><button class="btn" data-act="add-one" data-id="'+id+'">Add</button></li>';
+    var s=SONGS[id],od=deckOf(id);
+    return '<li class="arow">'+thumb(id)+'<span class="tt"><b>'+esc(s.t)+'</b><span>'+esc(s.a)+' · '+esc(s.g)+(od?' · in '+esc(od.name||'Untitled deck'):'')+'</span></span><button class="btn" data-act="add-one" data-id="'+id+'">'+(od?'Move here':'Add')+'</button></li>';
   }).join('');
 }
 function pickSheetHtml(){
